@@ -6,8 +6,8 @@
 #include "fmt/ranges.h"
 #include "freertos/idf_additions.h"
 #include "DDKAuthContext.h"
-#include "pn532_hal/spi.hpp"
-#include "soc/gpio_num.h"
+#include "Pn532Reader.hpp"
+#include "Pn7160Reader.hpp"
 #include "utils.hpp"
 
 #include <array>
@@ -53,14 +53,10 @@ void NfcManager::initAuthPrecompute() {
 
   for (size_t i = 0; i < kAuthCtxPoolSize; i++) {
     m_authPool[i].nfcFn = [this](std::vector<uint8_t>& send, std::vector<uint8_t>& recv, bool isLong) -> bool {
-      if (send.size() > 255) {
+      if (!m_reader || send.size() > 255) {
         return false;
       }
-      pn532::Status ok = m_nfc->InDataExchange(send, recv);
-      if(recv.size() >= 2){
-          recv.erase(recv.begin(), recv.begin() + 2);
-      }
-      return ok == pn532::Status::SUCCESS;
+      return m_reader->exchangeApdu(send, recv, isLong ? 1000 : 500);
     };
     m_authPool[i].saveFn = [this](const readerData_t& data) {
       m_readerDataManager.updateReaderData(data);
@@ -205,15 +201,24 @@ void NfcManager::authPrecomputeTask() {
  * DEBUG_AUTH_FLOW updates the debug authentication flow when received.
  *
  * @param readerDataManager Reference to the ReaderDataManager used to read and persist reader data.
- * @param nfcGpioPins Four GPIO pin numbers used to construct the PN532 SPI interface.
+ * @param nfcGpioPins Four GPIO pin numbers used for SPI communication (SS/CS, SCK, MISO, MOSI).
+ * @param nfcReaderType 0 = PN532, 1 = PN7160.
+ * @param nfcIrqPin IRQ pin for PN7160 (255 = unset).
+ * @param nfcVenPin VEN pin for PN7160 (255 = unset).
  * @param hkAuthPrecomputeEnabled If true, enables HomeKit authentication precompute behavior.
  * @param nfcFastPollingEnabled If true, shortens the delay between polling iterations.
  */
 NfcManager::NfcManager(ReaderDataManager& readerDataManager,
                        const std::array<uint8_t, 4> &nfcGpioPins,
+                       uint8_t nfcReaderType,
+                       uint8_t nfcIrqPin,
+                       uint8_t nfcVenPin,
                        bool hkAuthPrecomputeEnabled,
                        bool nfcFastPollingEnabled)
     : nfcGpioPins(nfcGpioPins),
+      m_nfcReaderType(nfcReaderType),
+      m_nfcIrqPin(nfcIrqPin),
+      m_nfcVenPin(nfcVenPin),
       m_readerDataManager(readerDataManager),
       m_hkAuthPrecomputeEnabled(hkAuthPrecomputeEnabled),
       m_nfcFastPollingEnabled(nfcFastPollingEnabled),
@@ -250,15 +255,21 @@ NfcManager::NfcManager(ReaderDataManager& readerDataManager,
 }
 
 /**
- * @brief Initialize the PN532 SPI interface, create the PN532 instance, and start the NFC polling task.
+ * @brief Initialize the selected NFC reader and start the NFC polling task.
  *
- * Initializes internal PN532_SPI and PN532 objects and launches the background task that drives NFC polling.
+ * Instantiates the correct reader implementation (PN532 or PN7160) and launches
+ * the background task that drives NFC polling.
  *
  * @return `true` if the NFC polling task was started, `false` otherwise.
  */
 bool NfcManager::begin() {
-    m_pn532spi = new pn532::SpiTransport((gpio_num_t)GPIO_NUM_NC, (gpio_num_t)nfcGpioPins[2], (gpio_num_t)nfcGpioPins[3], (gpio_num_t)nfcGpioPins[1], (gpio_num_t)nfcGpioPins[0]); 
-    m_nfc = new pn532::Frontend(*m_pn532spi);
+    if (m_nfcReaderType == 0) {
+        m_reader = std::make_unique<Pn532Reader>(nfcGpioPins);
+        ESP_LOGI(TAG, "Using PN532 reader.");
+    } else {
+        m_reader = std::make_unique<Pn7160Reader>(nfcGpioPins, m_nfcIrqPin, m_nfcVenPin);
+        ESP_LOGI(TAG, "Using PN7160 reader.");
+    }
     if (m_hkAuthPrecomputeEnabled) {
         initAuthPrecompute();
     } else {
@@ -290,36 +301,30 @@ void NfcManager::updateEcpData() {
 }
 
 /**
- * @brief Initialize and configure the PN532 NFC reader and refresh ECP data.
+ * @brief Initialize the selected NFC reader and refresh ECP data.
  *
- * Attempts to start the PN532, verify firmware presence, configure the SAM,
- * RF field, and passive activation retry policy, then updates the manager's
+ * Delegates to the active reader's init() method. On success, updates the manager's
  * ECP data buffer.
  *
- * @return `true` if the reader was successfully initialized and ECP data updated, `false` if firmware/version check failed and the reader was stopped.
+ * @return `true` if the reader was successfully initialized and ECP data updated, `false` otherwise.
  */
 bool NfcManager::initializeReader() {
-    m_nfc->begin();
-    uint32_t versiondata = m_nfc->GetFirmwareVersion();
-    if (!versiondata) {
-        ESP_LOGE(TAG, "Error establishing PN532 connection.");
+    if (!m_reader) {
+        ESP_LOGE(TAG, "No reader instance available.");
         return false;
     }
-    ESP_LOGI(TAG, "Found chip PN532, Firmware ver. %d.%d", (versiondata >> 24) & 0xFF, (versiondata >> 16) & 0xFF);
-    m_connected.store(true);
-    m_fwMajor = static_cast<uint8_t>((versiondata >> 24) & 0xFF);
-    m_fwMinor = static_cast<uint8_t>((versiondata >> 16) & 0xFF);
-    m_nfc->RFConfiguration(0x01, {0x03});
-    m_nfc->setPassiveActivationRetries(0);
-    m_nfc->RFConfiguration(0x02, {0x00, 0x0B, 0x10});
-    m_nfc->RFConfiguration(0x04, {0xFF});
+    bool ok = m_reader->init();
+    if (!ok) {
+        ESP_LOGE(TAG, "Reader initialization failed.");
+        return false;
+    }
     ESP_LOGI(TAG, "Reader initialized. Waiting for tags...");
     updateEcpData();
     return true;
 }
 
 /**
- * @brief Starts the PN532 reconnection retry task if it is not already running.
+ * @brief Starts the NFC reconnection retry task if it is not already running.
  *
  * Creates and stores a task handle for the background retry loop; if a retry task
  * is already active, this function returns without side effects.
@@ -356,17 +361,17 @@ void NfcManager::retryTaskEntry(void* instance) {
 }
 
 /**
- * @brief Continuously attempts to reconnect to the PN532 and restores normal polling on success.
+ * @brief Continuously attempts to reconnect to the NFC reader and restores normal polling on success.
  *
- * Repeatedly calls reader initialization until it succeeds. When the PN532 is reinitialized,
+ * Repeatedly calls reader initialization until it succeeds. When the reader is reinitialized,
  * the method resumes the polling task if present, clears the retry task handle, and terminates
  * the current retry task. On failure, it waits 5 seconds before trying again.
  */
 void NfcManager::retryTask() {
-    ESP_LOGI(TAG, "Starting PN532 reconnection task...");
+    ESP_LOGI(TAG, "Starting NFC reconnection task...");
     while (true) {
         if (initializeReader()) {
-            ESP_LOGI(TAG, "PN532 reconnected successfully.");
+            ESP_LOGI(TAG, "Reader reconnected successfully.");
             if (m_pollingTaskHandle) vTaskResume(m_pollingTaskHandle);
             m_retryTaskHandle = nullptr;
             vTaskDelete(NULL);
@@ -377,7 +382,7 @@ void NfcManager::retryTask() {
 }
 
 /**
- * @brief Main NFC polling loop that monitors the PN532 reader and dispatches tag handling.
+ * @brief Main NFC polling loop that monitors the reader and dispatches tag handling.
  *
  * @details Initializes the NFC reader and then runs indefinitely, repeatedly
  * checking the reader's responsiveness and polling for passive ISO14443A tags.
@@ -391,46 +396,46 @@ void NfcManager::pollingTask() {
       vTaskSuspend(NULL);
     }
 
-    const uint16_t inCommunicateThruTimeoutMs = 50;
+    if (!m_reader) {
+        ESP_LOGE(TAG, "Reader not available for polling.");
+        startRetryTask();
+        vTaskSuspend(NULL);
+    }
+
+    if (!m_reader->beginDiscovery()) {
+        ESP_LOGE(TAG, "Failed to start NFC discovery.");
+        startRetryTask();
+        vTaskSuspend(NULL);
+    }
+
     const uint16_t passiveTargetTimeoutMs = 500;
     const TickType_t pollDelayTicks =
         pdMS_TO_TICKS(m_nfcFastPollingEnabled ? 5 : 100);
 
     ESP_LOGI(TAG,
-             "NFC poll tuning active: delay=%lu ms, thruTimeout=%u ms, passiveTimeout=%u ms",
+             "NFC poll tuning active: delay=%lu ms, passiveTimeout=%u ms",
              static_cast<unsigned long>(pollDelayTicks * portTICK_PERIOD_MS),
-             static_cast<unsigned int>(inCommunicateThruTimeoutMs),
              static_cast<unsigned int>(passiveTargetTimeoutMs));
 
     while (true) {
-        if (m_nfc->WriteRegister({0x63,0x3d,0x0}) != pn532::SUCCESS) {
-            ESP_LOGE(TAG, "PN532 is unresponsive. Attempting to reconnect...");
-            m_connected.store(false);
-            m_fwMajor = 0;
-            m_fwMinor = 0;
+        if (!m_reader->healthCheck()) {
+            ESP_LOGE(TAG, "NFC reader is unresponsive. Attempting to reconnect...");
             startRetryTask();
             vTaskSuspend(NULL);
             continue;
         }
 
-        std::vector<uint8_t> res;
-        m_nfc->InCommunicateThru(std::vector<uint8_t>(m_ecpData.begin(), m_ecpData.end()), res, inCommunicateThruTimeoutMs);
+        if (m_reader->sendEcp(m_ecpData.data(), m_ecpData.size())) {
+            ESP_LOGV(TAG, "ECP frame sent.");
+        }
 
         std::vector<uint8_t> uid;
-        std::array<uint8_t,2> sens_res;
-        uint8_t sel_res;
-        pn532::Status passiveTargetFound = m_nfc->InListPassiveTarget(PN532_MIFARE_ISO14443A, uid, sens_res, sel_res, passiveTargetTimeoutMs);
-        
-        if (passiveTargetFound == pn532::SUCCESS) {
+        std::array<uint8_t,2> atqa;
+        uint8_t sak;
+        if (m_reader->pollForTag(uid, atqa, sak, passiveTargetTimeoutMs)) {
             ESP_LOGI(TAG, "NFC tag detected!");
-            handleTagPresence(uid, sens_res, sel_res);
-            pn532::Status status;
-            while ((status = m_nfc->InListPassiveTarget(0x00, uid, sens_res, sel_res)) == pn532::SUCCESS) {
-              m_nfc->InRelease(1);
-              vTaskDelay(pdMS_TO_TICKS(60));
-            }
-            ESP_LOGI(TAG, "NFC tag removed!");
-            m_nfc->setPassiveActivationRetries(0);
+            handleTagPresence(uid, atqa, sak);
+            waitForTagRemoval();
         }
 
         vTaskDelay(pollDelayTicks);
@@ -443,28 +448,47 @@ void NfcManager::pollingTask() {
  *
  * Attempts to select the HomeKey applet on the tag via an APDU select command; if selection succeeds, proceeds with
  * HomeKey authentication handling. If selection fails, reads the tag's UID/ATQA/SAK and processes it as a generic ISO14443A tag.
- * Logs the tag processing duration and releases the PN532 device state before returning.
+ * Logs the tag processing duration and releases the reader device state before returning.
  */
 void NfcManager::handleTagPresence(const std::vector<uint8_t>& uid, const std::array<uint8_t,2>& atqa, const uint8_t& sak) {
     auto startTime = std::chrono::high_resolution_clock::now();
     uint8_t selectAppletCmd[] = { 0x00, 0xA4, 0x04, 0x00, 0x07, 0xA0, 0x00, 0x00, 0x08, 0x58, 0x01, 0x01, 0x00 };
     std::vector<uint8_t> response;
-    pn532::Status status = m_nfc->InDataExchange(std::vector<uint8_t>(selectAppletCmd, selectAppletCmd + sizeof(selectAppletCmd)), response);
+    bool ok = m_reader->exchangeApdu(std::vector<uint8_t>(selectAppletCmd, selectAppletCmd + sizeof(selectAppletCmd)), response, 500);
 
     // Check for success SW1=0x90, SW2=0x00
-    if (status == pn532::SUCCESS && response.size() >= 2 && response[response.size() - 2] == 0x90 && response[response.size() - 1] == 0x00) {
+    if (ok && response.size() >= 2 && response[response.size() - 2] == 0x90 && response[response.size() - 1] == 0x00) {
         ESP_LOGI(TAG, "HomeKey applet selected successfully.");
         handleHomeKeyAuth();
     } else {
         ESP_LOGI(TAG, "Not a HomeKey tag, or failed to select applet.");
-        ESP_LOGD(TAG, "Passive target UID: %s (%d)", fmt::format("{:02X}", fmt::join(uid, "")).c_str(), uid.size());
+        ESP_LOGD(TAG, "Passive target UID: %s (%zu)", fmt::format("{:02X}", fmt::join(uid, "")).c_str(), uid.size());
         handleGenericTag(uid, atqa, sak);
     }
-    
+
     auto stopTime = std::chrono::high_resolution_clock::now();
     ESP_LOGI(TAG, "Total processing time: %lli ms", std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime).count());
-    
-    m_nfc->InRelease(1);
+}
+
+/**
+ * @brief Block until the active tag leaves the reader's RF field.
+ *
+ * Spins on `isTagStillPresent()` with a 60 ms delay between checks.  If the
+ * tag is not removed within 10 seconds, the reader is force-released and the
+ * function returns to avoid an infinite loop.
+ */
+void NfcManager::waitForTagRemoval() {
+    if (!m_reader) return;
+    TickType_t start = xTaskGetTickCount();
+    while (m_reader->isTagStillPresent()) {
+        if ((xTaskGetTickCount() - start) * portTICK_PERIOD_MS > 10000) {
+            ESP_LOGW(TAG, "Tag removal wait timed out, forcing release.");
+            m_reader->releaseTag();
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(60));
+    }
+    m_reader->releaseTag();
 }
 
 /**
@@ -512,14 +536,10 @@ void NfcManager::handleHomeKeyAuth() {
         // Do NOT pass lambdas directly (would bind to temporaries and dangle).
         std::function<bool(std::vector<uint8_t>&, std::vector<uint8_t>&, bool)> nfcFn =
             [this](std::vector<uint8_t>& send, std::vector<uint8_t>& recv, bool isLong) -> bool {
-                if (send.size() > 255) {
+                if (!m_reader || send.size() > 255) {
                     return false;
                 }
-                pn532::Status ok = m_nfc->InDataExchange(send, recv);
-                if(recv.size() >= 2){
-                    recv.erase(recv.begin(), recv.begin() + 2);
-                }
-                return ok == pn532::SUCCESS;
+                return m_reader->exchangeApdu(send, recv, isLong ? 1000 : 500);
             };
         std::function<void(const readerData_t&)> saveFn = [this](const readerData_t& data) {
             m_readerDataManager.updateReaderData(data);
@@ -593,11 +613,6 @@ void NfcManager::handleHomeKeyAuth() {
  * Constructs an EventTagTap containing the tag UID, ATQA, and SAK, serializes it
  * into an NfcEvent payload, and publishes the serialized event to the NFC event
  * topic.
- *
- * @param uid Pointer to the tag UID bytes.
- * @param uidLen Number of bytes in `uid`.
- * @param atqa Pointer to the 2-byte ATQA value.
- * @param sak Pointer to the 1-byte SAK value.
  */
 void NfcManager::handleGenericTag(const std::vector<uint8_t>& uid, const std::array<uint8_t,2>& atqa, const uint8_t& sak) {
     EventTagTap s{.uid = uid, .atqa = atqa, .sak = sak};

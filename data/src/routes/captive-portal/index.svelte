@@ -380,13 +380,16 @@
 					<div class="space-y-4">
 						<div>
 							<h3 class="text-sm font-semibold">Hardware Configuration</h3>
-							<p class="text-xs text-base-content/60">Configure GPIO pins for PN532 NFC reader and optional Ethernet connectivity.</p>
+							<p class="text-xs text-base-content/60">Configure GPIO pins for NFC reader and optional Ethernet connectivity.</p>
 						</div>
 
 						<HardwareConfig
 							nfcGpioPins={config.nfcGpioPins}
 							nfcPinsPreset={config.nfcPinsPreset}
 							nfcPresets={nfcPresets}
+							nfcReaderType={config.nfcReaderType}
+							nfcIrqPin={config.nfcIrqPin}
+							nfcVenPin={config.nfcVenPin}
 							ethernetEnabled={config.ethernetEnabled}
 							ethActivePreset={config.ethActivePreset}
 							ethPhyType={config.ethPhyType}
@@ -396,8 +399,11 @@
 							ethConfig={ethConfig}
 							loading={loading}
 							onNfcPresetChange={handleNfcPresetChange}
-							onEthPresetChange={handleEthPresetChange}
+							onNfcReaderTypeChange={(type) => config.nfcReaderType = type}
 							onNfcPinsChange={(pins) => config.nfcGpioPins = pins}
+							onNfcIrqPinChange={(pin) => config.nfcIrqPin = pin}
+							onNfcVenPinChange={(pin) => config.nfcVenPin = pin}
+							onEthPresetChange={handleEthPresetChange}
 							onEthernetToggle={(enabled) => config.ethernetEnabled = enabled}
 							onEthPhyTypeChange={(phyType) => config.ethPhyType = phyType}
 							onEthSpiBusChange={(bus) => config.ethSpiBus = bus}

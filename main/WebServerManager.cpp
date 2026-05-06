@@ -1276,6 +1276,9 @@ esp_err_t WebServerManager::handleGetCaptivePortalConfig(httpd_req_t *req) {
     cJSON_AddItemToArray(nfcGpioPins, cJSON_CreateNumber(pin));
   }
   cJSON_AddItemToObject(config, "nfcGpioPins", nfcGpioPins);
+  cJSON_AddNumberToObject(config, "nfcReaderType", miscConfig.nfcReaderType);
+  cJSON_AddNumberToObject(config, "nfcIrqPin", miscConfig.nfcIrqPin);
+  cJSON_AddNumberToObject(config, "nfcVenPin", miscConfig.nfcVenPin);
 
   // Ethernet configuration
   cJSON_AddBoolToObject(config, "ethernetEnabled", miscConfig.ethernetEnabled);
@@ -1482,10 +1485,22 @@ esp_err_t WebServerManager::handleSaveCaptivePortalConfig(httpd_req_t *req) {
 
   cJSON *nfcPresetItem = cJSON_GetObjectItem(obj, "nfcPinsPreset");
   cJSON *nfcGpioPinsItem = cJSON_GetObjectItem(obj, "nfcGpioPins");
+  cJSON *nfcReaderTypeItem = cJSON_GetObjectItem(obj, "nfcReaderType");
+  cJSON *nfcIrqPinItem = cJSON_GetObjectItem(obj, "nfcIrqPin");
+  cJSON *nfcVenPinItem = cJSON_GetObjectItem(obj, "nfcVenPin");
   if (nfcPresetItem && cJSON_IsNumber(nfcPresetItem) && nfcGpioPinsItem && cJSON_IsArray(nfcGpioPinsItem)) {
     cJSON *nfcUpdate = cJSON_CreateObject();
     cJSON_AddNumberToObject(nfcUpdate, "nfcPinsPreset", nfcPresetItem->valueint);
     cJSON_AddItemToObject(nfcUpdate, "nfcGpioPins", cJSON_Duplicate(nfcGpioPinsItem, true));
+    if (nfcReaderTypeItem && cJSON_IsNumber(nfcReaderTypeItem)) {
+      cJSON_AddNumberToObject(nfcUpdate, "nfcReaderType", nfcReaderTypeItem->valueint);
+    }
+    if (nfcIrqPinItem && cJSON_IsNumber(nfcIrqPinItem)) {
+      cJSON_AddNumberToObject(nfcUpdate, "nfcIrqPin", nfcIrqPinItem->valueint);
+    }
+    if (nfcVenPinItem && cJSON_IsNumber(nfcVenPinItem)) {
+      cJSON_AddNumberToObject(nfcUpdate, "nfcVenPin", nfcVenPinItem->valueint);
+    }
     char *nfcJson = cJSON_PrintUnformatted(nfcUpdate);
     instance->m_configManager.updateFromJson<espConfig::misc_config_t>(nfcJson);
     cJSON_free(nfcJson);
@@ -1970,6 +1985,7 @@ std::string WebServerManager::getDeviceMetrics() {
   cJSON_AddNumberToObject(status, "free_heap", esp_get_free_heap_size());
   cJSON_AddNumberToObject(status, "wifi_rssi", WiFi.RSSI());
   cJSON_AddBoolToObject(status, "nfc_connected", m_nfcManager ? m_nfcManager->isConnected() : false);
+  cJSON_AddNumberToObject(status, "nfc_reader_type", m_configManager.getConfig<espConfig::misc_config_t>().nfcReaderType);
   cJSON_AddBoolToObject(status, "mqtt_connected", m_mqttManager ? m_mqttManager->isConnected() : false);
   cJSON_AddNumberToObject(status, "mqtt_error_code", m_mqttManager ? static_cast<uint8_t>(m_mqttManager->getLastErrorCode()) : 0);
   if (m_mqttManager && !m_mqttManager->getLastErrorMessage().empty()) {

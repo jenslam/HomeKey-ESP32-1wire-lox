@@ -93,6 +93,12 @@ export interface CaptivePortalConfig {
   nfcPinsPreset: number;
   /** NFC GPIO pin configuration [SS, SCK, MISO, MOSI] */
   nfcGpioPins: [number, number, number, number];
+  /** NFC reader type (0 = PN532, 1 = PN7160) */
+  nfcReaderType: number;
+  /** PN7160 IRQ pin */
+  nfcIrqPin: number;
+  /** PN7160 VEN pin */
+  nfcVenPin: number;
   /** Enable Ethernet connectivity */
   ethernetEnabled: boolean;
   /** Active Ethernet preset index */
@@ -151,6 +157,12 @@ export interface MiscConfig {
   nfcPinsPreset: number;
   /** NFC GPIO pin configuration [pin1, pin2, pin3, pin4] */
   nfcGpioPins: [number, number, number, number];
+  /** NFC reader type (0 = PN532, 1 = PN7160) */
+  nfcReaderType: number;
+  /** PN7160 IRQ pin */
+  nfcIrqPin: number;
+  /** PN7160 VEN pin */
+  nfcVenPin: number;
   /** Battery low status threshold percentage */
   btrLowStatusThreshold: number;
   /** Enable proximity battery monitoring */

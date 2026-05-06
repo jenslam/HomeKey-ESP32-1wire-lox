@@ -6,9 +6,9 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <memory>
 #include "app_event_loop.hpp"
-#include "pn532_cxx/pn532.hpp"
-#include "pn532_hal/spi.hpp"
+#include "NfcReader.hpp"
 
 class LockManager;
 class HardwareManager;
@@ -21,14 +21,17 @@ class NfcManager {
 public:
     NfcManager(ReaderDataManager& readerDataManager,
                const std::array<uint8_t, 4> &nfcGpioPins,
+               uint8_t nfcReaderType,
+               uint8_t nfcIrqPin,
+               uint8_t nfcVenPin,
                bool hkAuthPrecomputeEnabled,
                bool nfcFastPollingEnabled);
     /**
- * @brief Unsubscribes the manager's HomeKey event subscription from the global EventBus.
- *
- * Ensures the subscriber identified by m_hk_event is removed when the NfcManager is destroyed.
- */
-~NfcManager() = default;
+     * @brief Unsubscribes the manager's HomeKey event subscription from the global EventBus.
+     *
+     * Ensures the subscriber identified by m_hk_event is removed when the NfcManager is destroyed.
+     */
+    ~NfcManager() = default;
     bool begin();
     void updateEcpData();
 
@@ -64,11 +67,13 @@ private:
     void handleHomeKeyAuth();
     void handleGenericTag(const std::vector<uint8_t>& uid, const std::array<uint8_t,2>& atqa, const uint8_t& sak);
     void waitForTagRemoval();
-    
+
     // --- Member Variables ---
     const std::array<uint8_t, 4> &nfcGpioPins;
-    pn532::SpiTransport *m_pn532spi;
-    pn532::Frontend *m_nfc;
+    uint8_t m_nfcReaderType;
+    uint8_t m_nfcIrqPin;
+    uint8_t m_nfcVenPin;
+    std::unique_ptr<INfcReader> m_reader;
 
     ReaderDataManager& m_readerDataManager;
     const bool m_hkAuthPrecomputeEnabled;
@@ -89,27 +94,23 @@ private:
 
     static const char* TAG;
     AppEventLoop::SubscriptionHandle m_hk_event;
-    // Status tracking (replaces event-based status publishing)
-    std::atomic<bool> m_connected{false};
-    uint8_t m_fwMajor{0};
-    uint8_t m_fwMinor{0};
 
 public:
     /**
      * @brief Check if NFC reader is connected.
      * @return true if connected, false otherwise.
      */
-    bool isConnected() const { return m_connected.load(); }
+    bool isConnected() const { return m_reader ? m_reader->isConnected() : false; }
 
     /**
      * @brief Get firmware version major.
      * @return Major version number.
      */
-    uint8_t getFirmwareVersionMajor() const { return m_fwMajor; }
+    uint8_t getFirmwareVersionMajor() const { return m_reader ? m_reader->getFwMajor() : 0; }
 
     /**
      * @brief Get firmware version minor.
      * @return Minor version number.
      */
-    uint8_t getFirmwareVersionMinor() const { return m_fwMinor; }
+    uint8_t getFirmwareVersionMinor() const { return m_reader ? m_reader->getFwMinor() : 0; }
 };
