@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "pn7160.hpp"
 #include "portmacro.h"
+#include <vector>
 
 Pn7160Reader::Pn7160Reader(const std::array<uint8_t, 4>& gpioPins,
                            uint8_t irqPin,
@@ -48,6 +49,51 @@ bool Pn7160Reader::init() {
         ESP_LOGE(TAG, "PN7160 initialization failed: 0x%X", ret);
         stop();
         return false;
+    }
+
+    // UM11495 Section 13.1 - PMU_CFG (Tag 0xA00E)
+    static const std::vector<uint8_t> PMU_CFG = {
+        0x01,        // Number of parameters
+        0xA0, 0x0E,  // ext. tag
+        11,          // length
+        0x11,        // IRQ Enable: PVDD + temp sensor IRQs
+        0x01,        // RFU
+        0x01,        // Power and Clock Configuration, device on (CFG1)
+        0x01,        // Power and Clock Configuration, device off (CFG1)
+        0x00,        // RFU
+        0x00,        // DC-DC 0
+        0x00,        // DC-DC 1
+        0xFF,        // TXLDO (5.0V / 5.0V)
+        0x00,        // RFU
+        0x90,        // TXLDO check
+        0x0C,        // RFU
+    };
+
+    ret = m_nci->core_set_config(PMU_CFG);
+
+    if (ret == ESP_FAIL) return ESP_FAIL;
+    if (ret != nci::STATUS_OK) {
+        ESP_LOGE(TAG, "Failed to set PMU config (NCI Status=0x%02X)", ret);
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "PMU Config set successfully");
+
+    // NCI Core Spec v2.0 Section 6.1 - TOTAL_DURATION (Tag 0x00)
+    static const std::vector<uint8_t> CORE_CONFIG_TOTAL_DURATION_SOLO = {
+        0x01,  // Number of parameter fields
+        0x00,  // config param identifier (TOTAL_DURATION)
+        0x02,  // length of value
+        0x32,  // TOTAL_DURATION (low)
+        0x00   // TOTAL_DURATION (high)
+    };
+    
+    ret = m_nci->core_set_config(CORE_CONFIG_TOTAL_DURATION_SOLO);
+
+    if (ret == ESP_FAIL) return ESP_FAIL;
+    if (ret != nci::STATUS_OK) {
+        ESP_LOGE(TAG, "Failed to set TOTAL_DURATION config (NCI Status=0x%02X)", ret);
+    } else {
+        ESP_LOGI(TAG, "TOTAL_DURATION Config set successfully");
     }
 
     m_connected = true;
