@@ -132,7 +132,14 @@ bool Pn7160Reader::pollForTag(std::vector<uint8_t>& uid,
                               uint32_t timeoutMs) {
     if (!m_nci) return false;
     NciEvent event;
-    esp_err_t ret = m_nci->get_event(event, portMAX_DELAY);
+    esp_err_t ret = m_nci->get_event(event, timeoutMs);
+    if (ret == ESP_ERR_TIMEOUT) {
+        return false;
+    }
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "get_event failed: 0x%X", ret);
+        return false;
+    }
     switch (event.type) {
         case NciEventType::RF_INTF_ACTIVATED: {
             const NciMessage& msg = event.msg;
