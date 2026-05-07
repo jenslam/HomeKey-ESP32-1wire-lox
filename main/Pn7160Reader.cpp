@@ -61,7 +61,7 @@ bool Pn7160Reader::init() {
         "pn7160_runner",
         4096,
         m_nci,
-        3,
+        4,
         &m_taskHandle,
         1);
     if (ok != pdPASS) {

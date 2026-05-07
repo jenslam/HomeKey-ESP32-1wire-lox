@@ -186,7 +186,7 @@ void WebServerManager::begin() {
     return;
   }
 
-  if (xTaskCreate(ws_send_task, "ws_send_task", 4096, this, 5,
+  if (xTaskCreate(ws_send_task, "ws_send_task", 4096, this, 2,
                   &m_wsTaskHandle) != pdPASS) {
     ESP_LOGE(TAG, "Failed to create WebSocket task");
     vQueueDelete(m_wsQueue);
