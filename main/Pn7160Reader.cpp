@@ -164,6 +164,15 @@ bool Pn7160Reader::pollForTag(std::vector<uint8_t>& uid,
             //   SEL_RES Response           (0 or 1 byte)
             //   HRx Length                 (1 byte)
             //   HRx                        (0 or 2 bytes)
+            if(p[1] != nci::INTF_ISODEP){
+              if((xTaskGetTickCount() - m_lastActivation) < pdMS_TO_TICKS(400)){
+                ESP_LOGD(TAG, "Tag activated within cooldown window, ignoring!");
+                m_lastActivation = xTaskGetTickCount();
+                releaseTag();
+                return false;
+              }
+              m_lastActivation = xTaskGetTickCount();
+            }
             if (plen < 7) {
                 ESP_LOGW(TAG, "RF_INTF_ACTIVATED payload too short (%u).", plen);
                 ESP_LOG_BUFFER_HEXDUMP(TAG, p, plen, ESP_LOG_WARN);
@@ -269,10 +278,6 @@ bool Pn7160Reader::isTagStillPresent() {
             m_lastPresenceCheck = now;
         }
         return m_nci->tag_in_field();
-    } else {
-      // Haven't yet managed to implement a good reliable way to detect presence for non ISO-DEP targets
-      // so we'll just use a delay for now, it is what it is.
-      vTaskDelay(2000);
     }
     return false;
 }

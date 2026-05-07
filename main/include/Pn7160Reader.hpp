@@ -62,6 +62,7 @@ private:
     uint8_t m_fwMajor = 0;
     uint8_t m_fwMinor = 0;
     uint8_t m_currentProtocol = 0;    // RF protocol of the active tag (nci::PROT_*)
+    TickType_t m_lastActivation = 0;
 
     static constexpr uint32_t kPresenceCheckIntervalMs = 500;
 
