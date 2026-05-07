@@ -85,6 +85,7 @@ bool Pn532Reader::pollForTag(std::vector<uint8_t>& uid,
 
 bool Pn532Reader::isTagStillPresent() {
     if (!m_frontend) return false;
+    releaseTag();
     std::vector<uint8_t> uid;
     std::array<uint8_t, 2> atqa;
     uint8_t sak;
