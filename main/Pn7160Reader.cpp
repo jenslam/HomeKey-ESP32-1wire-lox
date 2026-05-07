@@ -238,15 +238,6 @@ bool Pn7160Reader::pollForTag(std::vector<uint8_t>& uid,
         case NciEventType::RF_DISCOVER: {
             if (event.msg.size() < 7) {
                 ESP_LOGW(TAG, "RF_DISCOVER payload too short (%zu)", event.msg.size());
-                break;
-            }
-            uint8_t discoveryId = event.msg[3];
-            uint8_t protocol = event.msg[4];
-            uint8_t ntfType = event.msg[event.msg.size() - 1];
-
-            if (ntfType == 0x02) {
-                ESP_LOGD(TAG, "RF_DISCOVER auto-activation, skipping select.");
-                break;
             }
             break;
         }
