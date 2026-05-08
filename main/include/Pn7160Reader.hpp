@@ -60,12 +60,14 @@ private:
 
     bool m_connected = false;
     uint32_t m_lastPresenceCheck = 0; // Tick count of last rf_iso_dep_presence_check()
+    TickType_t m_lastHealthCheckTick = 0;
     uint8_t m_fwMajor = 0;
     uint8_t m_fwMinor = 0;
     uint8_t m_currentProtocol = 0;    // RF protocol of the active tag (nci::PROT_*)
     TickType_t m_lastActivation = 0;
 
     static constexpr uint32_t kPresenceCheckIntervalMs = 500;
+    static constexpr uint32_t kHealthCheckIntervalMs = 10000;
 
     static constexpr const char* TAG = "Pn7160Reader";
 };

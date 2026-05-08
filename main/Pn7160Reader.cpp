@@ -105,6 +105,7 @@ bool Pn7160Reader::init() {
 
     m_connected = true;
     m_lastPresenceCheck = 0;
+    m_lastHealthCheckTick = xTaskGetTickCount();
     m_fwMajor = 2;  // NCI 2.x major
     m_fwMinor = 0;
     m_currentProtocol = 0;
@@ -134,7 +135,6 @@ void Pn7160Reader::stop() {
         m_nci->shutdown();
     }
     if (m_taskHandle) {
-        // Wait up to 500 ms for the task_runner to self-delete.
         int waitCount = 0;
         while (m_nci && m_nci->is_initialized() && waitCount < 50) {
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -153,6 +153,7 @@ void Pn7160Reader::stop() {
     }
     m_connected = false;
     m_lastPresenceCheck = 0;
+    m_lastHealthCheckTick = 0;
     m_fwMajor = 0;
     m_fwMinor = 0;
     m_currentProtocol = 0;
@@ -375,6 +376,21 @@ bool Pn7160Reader::healthCheck() {
         m_fwMajor = 0;
         m_fwMinor = 0;
         return false;
+    }
+
+    TickType_t now = xTaskGetTickCount();
+    if ((now - m_lastHealthCheckTick) * portTICK_PERIOD_MS >= kHealthCheckIntervalMs) {
+        NciMessage cmd{nci::PKT_MT_CTRL_COMMAND, nci::CORE_GID, nci::CORE_GET_CONFIG_OID, {0x01, 0x0}}, rsp;
+        esp_err_t ret = m_nci->send_command_wait_response(cmd, rsp, nci::PN7160_DEFAULT_TIMEOUT_MS);
+        if (ret != nci::STATUS_OK) {
+            ESP_LOGE(TAG, "Health check failed: NCI Status=0x%02X", ret);
+            m_connected = false;
+            m_fwMajor = 0;
+            m_fwMinor = 0;
+            return false;
+        }
+        ESP_LOGD(TAG, "Health check OK");
+        m_lastHealthCheckTick = now;
     }
     return true;
 }
