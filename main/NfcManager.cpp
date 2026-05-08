@@ -379,12 +379,13 @@ void NfcManager::retryTask() {
         if (initializeReader()) {
             ESP_LOGI(TAG, "Reader reconnected successfully.");
             if (m_pollingTaskHandle) vTaskResume(m_pollingTaskHandle);
-            m_retryTaskHandle = nullptr;
-            vTaskDelete(NULL);
+        		break;
         }
         ESP_LOGW(TAG, "Reconnect attempt failed. Retrying in 5 seconds...");
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
+		m_retryTaskHandle = nullptr;
+		vTaskDelete(NULL);
 }
 
 /**
