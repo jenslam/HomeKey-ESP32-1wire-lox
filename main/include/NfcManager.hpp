@@ -27,9 +27,10 @@ public:
                bool hkAuthPrecomputeEnabled,
                bool nfcFastPollingEnabled);
     /**
-     * @brief Unsubscribes the manager's HomeKey event subscription from the global EventBus.
+     * `@brief` Destructor.
      *
-     * Ensures the subscriber identified by m_hk_event is removed when the NfcManager is destroyed.
+     * The HomeKey event subscription (m_hk_event) is automatically unregistered
+     * when NfcManager is destroyed, via SubscriptionHandle's RAII cleanup.
      */
     ~NfcManager() = default;
     bool begin();
