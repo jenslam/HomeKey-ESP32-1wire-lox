@@ -277,8 +277,13 @@ bool NfcManager::begin() {
     }
     ESP_LOGI(TAG, "NFC fast polling: %s", m_nfcFastPollingEnabled ? "enabled" : "disabled");
     ESP_LOGI(TAG, "Starting NFC polling task...");
-    xTaskCreateUniversal(pollingTaskEntry, "nfc_poll_task", 8192, this, 4, &m_pollingTaskHandle, 1);
-    return true;
+		BaseType_t ok = xTaskCreateUniversal(
+				pollingTaskEntry, "nfc_poll_task", 8192, this, 4, &m_pollingTaskHandle, 1);
+		if (ok != pdPASS || !m_pollingTaskHandle) {
+			ESP_LOGE(TAG, "Failed to create NFC polling task.");
+			return false;
+		}
+		return true;
 }
 
 /**
