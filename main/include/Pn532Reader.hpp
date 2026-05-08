@@ -17,7 +17,7 @@
  */
 class Pn532Reader : public INfcReader {
 public:
-    Pn532Reader(const std::array<uint8_t, 4>& gpioPins);
+    Pn532Reader(const std::array<uint8_t, 4>& gpioPins, const std::array<uint8_t, 18>& ecpData);
     ~Pn532Reader() override;
 
     bool init() override;
@@ -36,13 +36,13 @@ public:
     void releaseTag() override;
     void endDiscovery() override;
 
-    bool sendEcp(const uint8_t* ecpData, size_t len) override;
     bool exchangeApdu(const std::vector<uint8_t>& send,
                       std::vector<uint8_t>& recv,
                       uint32_t timeoutMs) override;
     bool healthCheck() override;
-
+    bool updateECP() override { return true;};
 private:
+    const std::array<uint8_t, 18> &m_ecpData;
     std::array<uint8_t, 4> m_gpioPins;
     pn532::SpiTransport* m_transport = nullptr;
     pn532::Frontend* m_frontend = nullptr;

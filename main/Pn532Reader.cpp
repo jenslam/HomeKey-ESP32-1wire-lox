@@ -1,9 +1,11 @@
 #include "Pn532Reader.hpp"
 #include "esp_log.h"
+#include <array>
 #include <chrono>
 
-Pn532Reader::Pn532Reader(const std::array<uint8_t, 4>& gpioPins)
-    : m_gpioPins(gpioPins) {}
+Pn532Reader::Pn532Reader(const std::array<uint8_t, 4>& gpioPins, const std::array<uint8_t, 18>& ecpData)
+    : m_ecpData(ecpData),
+      m_gpioPins(gpioPins) {}
 
 Pn532Reader::~Pn532Reader() {
     stop();
@@ -77,7 +79,9 @@ bool Pn532Reader::pollForTag(std::vector<uint8_t>& uid,
                              uint32_t timeoutMs) {
     if (!m_frontend) return false;
     uint8_t sel_res = 0;
-    pn532::Status status = m_frontend->InListPassiveTarget(
+    std::vector<uint8_t> res;
+    pn532::Status status = m_frontend->InCommunicateThru({m_ecpData.begin(), m_ecpData.end()}, res, 50);
+    status = m_frontend->InListPassiveTarget(
         PN532_MIFARE_ISO14443A, uid, atqa, sel_res, timeoutMs);
     sak = sel_res;
     return status == pn532::SUCCESS;
@@ -102,14 +106,6 @@ void Pn532Reader::releaseTag() {
 
 void Pn532Reader::endDiscovery() {
     // No explicit discovery stop required for PN532.
-}
-
-bool Pn532Reader::sendEcp(const uint8_t* ecpData, size_t len) {
-    if (!m_frontend || !ecpData || len == 0) return false;
-    std::vector<uint8_t> res;
-    std::vector<uint8_t> req(ecpData, ecpData + len);
-    pn532::Status status = m_frontend->InCommunicateThru(req, res, 50);
-    return status == pn532::SUCCESS;
 }
 
 bool Pn532Reader::exchangeApdu(const std::vector<uint8_t>& send,

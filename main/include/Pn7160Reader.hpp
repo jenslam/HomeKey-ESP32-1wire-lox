@@ -20,7 +20,8 @@ class Pn7160Reader : public INfcReader {
 public:
     Pn7160Reader(const std::array<uint8_t, 4>& gpioPins,
                  uint8_t irqPin,
-                 uint8_t venPin);
+                 uint8_t venPin,
+                 const std::array<uint8_t, 18>& ecpData);
     ~Pn7160Reader() override;
 
     bool init() override;
@@ -39,15 +40,15 @@ public:
     void releaseTag() override;
     void endDiscovery() override;
 
-    bool sendEcp(const uint8_t* ecpData, size_t len) override;
+    bool updateECP() override;
     bool exchangeApdu(const std::vector<uint8_t>& send,
                       std::vector<uint8_t>& recv,
                       uint32_t timeoutMs) override;
     bool healthCheck() override;
-
+    
 private:
     static void taskRunnerEntry(void* arg);
-
+    const std::array<uint8_t, 18> &m_ecpData;
     std::array<uint8_t, 4> m_gpioPins;
     uint8_t m_irqPin;
     uint8_t m_venPin;

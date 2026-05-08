@@ -2,6 +2,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp32-hal.h"
+#include "esp_log_buffer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/projdefs.h"
 #include "freertos/task.h"
@@ -11,10 +12,13 @@
 
 Pn7160Reader::Pn7160Reader(const std::array<uint8_t, 4>& gpioPins,
                            uint8_t irqPin,
-                           uint8_t venPin)
-    : m_gpioPins(gpioPins),
+                           uint8_t venPin,
+                          const std::array<uint8_t, 18>& ecpData)
+    : m_ecpData(ecpData),
+      m_gpioPins(gpioPins), 
       m_irqPin(irqPin),
-      m_venPin(venPin) {}
+      m_venPin(venPin)
+      {}
 
 Pn7160Reader::~Pn7160Reader() {
     stop();
@@ -50,33 +54,36 @@ bool Pn7160Reader::init() {
         stop();
         return false;
     }
+    NciMessage cfg;
+    ret = m_nci->core_get_config({0x1, 0xA0, 0x0E}, cfg);
+    ESP_LOG_BUFFER_HEX(TAG, cfg.get_payload_ptr(), cfg.size() - nci::NCI_HEADER_SIZE);
+    if(cfg.size() > 15 && cfg.get_payload_ptr()[12] != 0xff) {
+      // UM11495 Section 13.1 - PMU_CFG (Tag 0xA00E)
+      static const std::vector<uint8_t> PMU_CFG = {
+          0x01,        // Number of parameters
+          0xA0, 0x0E,  // ext. tag
+          0x0b,          // length
+          0x11,        // IRQ Enable: PVDD + temp sensor IRQs
+          0x01,        // RFU
+          0x01,        // Power and Clock Configuration, device on (CFG1)
+          0x01,        // Power and Clock Configuration, device off (CFG1)
+          0x00,        // RFU
+          0x00,        // DC-DC 0
+          0x00,        // DC-DC 1
+          0xFF,        // TXLDO (5.0V / 5.0V)
+          0x00,        // RFU
+          0x90,        // TXLDO check
+          0x0C,        // RFU
+      };
 
-    // UM11495 Section 13.1 - PMU_CFG (Tag 0xA00E)
-    static const std::vector<uint8_t> PMU_CFG = {
-        0x01,        // Number of parameters
-        0xA0, 0x0E,  // ext. tag
-        11,          // length
-        0x11,        // IRQ Enable: PVDD + temp sensor IRQs
-        0x01,        // RFU
-        0x01,        // Power and Clock Configuration, device on (CFG1)
-        0x01,        // Power and Clock Configuration, device off (CFG1)
-        0x00,        // RFU
-        0x00,        // DC-DC 0
-        0x00,        // DC-DC 1
-        0xFF,        // TXLDO (5.0V / 5.0V)
-        0x00,        // RFU
-        0x90,        // TXLDO check
-        0x0C,        // RFU
-    };
+      ret = m_nci->core_set_config(PMU_CFG);
 
-    ret = m_nci->core_set_config(PMU_CFG);
-
-    if (ret == ESP_FAIL) return ESP_FAIL;
-    if (ret != nci::STATUS_OK) {
-        ESP_LOGE(TAG, "Failed to set PMU config (NCI Status=0x%02X)", ret);
-        return ESP_FAIL;
+      if (ret != nci::STATUS_OK) {
+          ESP_LOGE(TAG, "Failed to set PMU config (NCI Status=0x%02X)", ret);
+          return ESP_FAIL;
+      }
+      ESP_LOGI(TAG, "PMU Config set successfully");
     }
-    ESP_LOGI(TAG, "PMU Config set successfully");
 
     // NCI Core Spec v2.0 Section 6.1 - TOTAL_DURATION (Tag 0x00)
     static const std::vector<uint8_t> CORE_CONFIG_TOTAL_DURATION_SOLO = {
@@ -344,12 +351,6 @@ void Pn7160Reader::endDiscovery() {
   }
 }
 
-bool Pn7160Reader::sendEcp(const uint8_t* ecpData, size_t len) {
-    (void)ecpData;
-    (void)len;
-    return false;
-}
-
 bool Pn7160Reader::exchangeApdu(const std::vector<uint8_t>& send,
                                 std::vector<uint8_t>& recv,
                                 uint32_t timeoutMs) {
@@ -374,4 +375,31 @@ bool Pn7160Reader::healthCheck() {
         return false;
     }
     return true;
+}
+
+ bool Pn7160Reader::updateECP() {
+  NciMessage cfg;
+  esp_err_t ret = m_nci->core_get_config({0x1, 0xA0, 0x6C}, cfg);
+  if (ret != nci::STATUS_OK) {
+      ESP_LOGE(TAG, "Failed to get config (NCI Status=0x%02X)", ret);
+      return false;
+  }
+  if(cfg.size() > 23){
+    if(!std::equal(cfg.get_payload_ptr() + 14, cfg.get_payload_ptr() + 22, m_ecpData.begin() + 10)){  
+      std::vector<uint8_t> CFG = {
+          0x01,
+          0xA0, 0x6C,
+          0x1E, static_cast<unsigned char>(m_ecpData.size() - 2)
+      };
+      CFG.insert(CFG.end(), m_ecpData.begin(), m_ecpData.end() - 2);;
+      CFG.resize(34);
+      esp_err_t ret = m_nci->core_set_config(CFG);
+
+      if (ret != nci::STATUS_OK) {
+          ESP_LOGE(TAG, "Failed to set config (NCI Status=0x%02X)", ret);
+        return false;
+      }
+    }
+  }
+  return true;
 }

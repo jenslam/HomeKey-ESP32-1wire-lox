@@ -85,14 +85,6 @@ public:
     // -------------------------------------------------------------------------
 
     /**
-     * @brief Send an ECP (Express Card Profile) wake-up frame.
-     *
-     * Only supported on readers that allow raw frame injection during discovery.
-     * @return true if the frame was sent, false if unsupported or failed.
-     */
-    virtual bool sendEcp(const uint8_t* ecpData, size_t len) = 0;
-
-    /**
      * @brief Exchange an APDU with the currently selected target.
      *
      * @param send    C-APDU bytes to transmit.
@@ -109,4 +101,7 @@ public:
      * @return true if the reader is responsive.
      */
     virtual bool healthCheck() = 0;
+
+
+    virtual bool updateECP() = 0;
 };

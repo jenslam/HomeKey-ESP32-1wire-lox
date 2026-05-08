@@ -264,10 +264,10 @@ NfcManager::NfcManager(ReaderDataManager& readerDataManager,
  */
 bool NfcManager::begin() {
     if (m_nfcReaderType == 0) {
-        m_reader = std::make_unique<Pn532Reader>(nfcGpioPins);
+        m_reader = std::make_unique<Pn532Reader>(nfcGpioPins, m_ecpData);
         ESP_LOGI(TAG, "Using PN532 reader.");
     } else {
-        m_reader = std::make_unique<Pn7160Reader>(nfcGpioPins, m_nfcIrqPin, m_nfcVenPin);
+        m_reader = std::make_unique<Pn7160Reader>(nfcGpioPins, m_nfcIrqPin, m_nfcVenPin, m_ecpData);
         ESP_LOGI(TAG, "Using PN7160 reader.");
     }
     if (m_hkAuthPrecomputeEnabled) {
@@ -295,6 +295,9 @@ void NfcManager::updateEcpData() {
     if (readerGid.size() == 8) {
         memcpy(m_ecpData.data() + 8, readerGid.data(), 8);
         Utils::crc16a(m_ecpData.data(), 16, m_ecpData.data() + 16);
+        if(m_nfcReaderType == 1){
+          m_reader->updateECP();
+        }
     } else {
         ESP_LOGW(TAG, "Reader GID is not provisioned. ECP data may be invalid.");
     }
@@ -313,13 +316,15 @@ bool NfcManager::initializeReader() {
         ESP_LOGE(TAG, "No reader instance available.");
         return false;
     }
+    if(m_nfcReaderType != 1){
+      updateEcpData();
+    }
     bool ok = m_reader->init();
     if (!ok) {
         ESP_LOGE(TAG, "Reader initialization failed.");
         return false;
     }
     ESP_LOGI(TAG, "Reader initialized. Waiting for tags...");
-    updateEcpData();
     return true;
 }
 
@@ -423,10 +428,6 @@ void NfcManager::pollingTask() {
             startRetryTask();
             vTaskSuspend(NULL);
             continue;
-        }
-
-        if (m_reader->sendEcp(m_ecpData.data(), m_ecpData.size())) {
-            ESP_LOGV(TAG, "ECP frame sent.");
         }
 
         std::vector<uint8_t> uid;
