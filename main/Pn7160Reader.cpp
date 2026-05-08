@@ -136,9 +136,14 @@ void Pn7160Reader::stop() {
     }
     if (m_taskHandle) {
         int waitCount = 0;
-        while (m_nci && m_nci->is_initialized() && waitCount < 50) {
+        while (m_nci && m_nci->is_task_running() && waitCount < 50) {
             vTaskDelay(pdMS_TO_TICKS(10));
             waitCount++;
+        }
+
+        if (m_nci && m_nci->is_task_running()) {
+            ESP_LOGE(TAG, "task_runner failed to exit cleanly! Forcing deletion.");
+            vTaskDelete(m_taskHandle);
         }
         m_taskHandle = nullptr;
     }
