@@ -19,6 +19,10 @@ class Pn532Reader : public INfcReader {
 public:
     Pn532Reader(const std::array<uint8_t, 4>& gpioPins, const std::array<uint8_t, 18>& ecpData);
     ~Pn532Reader() override;
+		Pn532Reader(const Pn532Reader&) = delete;
+		Pn532Reader& operator=(const Pn532Reader&) = delete;
+		Pn532Reader(Pn532Reader&&) = delete;
+
 
     bool init() override;
     void stop() override;

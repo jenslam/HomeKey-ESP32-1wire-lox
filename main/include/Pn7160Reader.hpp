@@ -23,6 +23,9 @@ public:
                  uint8_t venPin,
                  const std::array<uint8_t, 18>& ecpData);
     ~Pn7160Reader() override;
+		Pn7160Reader(const Pn7160Reader&) = delete;
+		Pn7160Reader& operator=(const Pn7160Reader&) = delete;
+		Pn7160Reader(Pn7160Reader&&) = delete;
 
     bool init() override;
     void stop() override;
