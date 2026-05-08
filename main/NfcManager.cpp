@@ -316,14 +316,15 @@ bool NfcManager::initializeReader() {
         ESP_LOGE(TAG, "No reader instance available.");
         return false;
     }
-    if(m_nfcReaderType != 1){
-      updateEcpData();
+    if(m_nfcReaderType != 1) {
+	    updateEcpData();
     }
-    bool ok = m_reader->init();
-    if (!ok) {
+    if (!m_reader->init()) {
+    		err:
         ESP_LOGE(TAG, "Reader initialization failed.");
         return false;
     }
+		if (!m_reader->beginDiscovery()){goto err;}
     ESP_LOGI(TAG, "Reader initialized. Waiting for tags...");
     return true;
 }
@@ -399,18 +400,6 @@ void NfcManager::pollingTask() {
     if (!initializeReader()) {
       startRetryTask();
       vTaskSuspend(NULL);
-    }
-
-    if (!m_reader) {
-        ESP_LOGE(TAG, "Reader not available for polling.");
-        startRetryTask();
-        vTaskSuspend(NULL);
-    }
-
-    if (!m_reader->beginDiscovery()) {
-        ESP_LOGE(TAG, "Failed to start NFC discovery.");
-        startRetryTask();
-        vTaskSuspend(NULL);
     }
 
     const uint16_t passiveTargetTimeoutMs = 500;
