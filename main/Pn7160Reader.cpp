@@ -403,14 +403,15 @@ bool Pn7160Reader::healthCheck() {
 }
 
  bool Pn7160Reader::updateECP() {
-  NciMessage cfg;
-  esp_err_t ret = m_nci->core_get_config({0x1, 0xA0, 0x6C}, cfg);
-  if (ret != nci::STATUS_OK) {
+    if (!m_nci) return false;
+    NciMessage cfg;
+    esp_err_t ret = m_nci->core_get_config({0x1, 0xA0, 0x6C}, cfg);
+    if (ret != nci::STATUS_OK) {
       ESP_LOGE(TAG, "Failed to get config (NCI Status=0x%02X)", ret);
       return false;
-  }
-  if(cfg.size() > 23){
-    if(!std::equal(cfg.get_payload_ptr() + 14, cfg.get_payload_ptr() + 22, m_ecpData.begin() + 10)){  
+    }
+    if(cfg.size() > 23){
+    if(!std::equal(cfg.get_payload_ptr() + 14, cfg.get_payload_ptr() + 22, m_ecpData.begin() + 10)){
       std::vector<uint8_t> CFG = {
           0x01,
           0xA0, 0x6C,
@@ -425,6 +426,6 @@ bool Pn7160Reader::healthCheck() {
         return false;
       }
     }
-  }
-  return true;
+    }
+    return true;
 }
