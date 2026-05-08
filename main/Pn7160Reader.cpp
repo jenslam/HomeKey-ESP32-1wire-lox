@@ -56,8 +56,10 @@ bool Pn7160Reader::init() {
     }
     NciMessage cfg;
     ret = m_nci->core_get_config({0x1, 0xA0, 0x0E}, cfg);
-    ESP_LOG_BUFFER_HEX(TAG, cfg.get_payload_ptr(), cfg.size() - nci::NCI_HEADER_SIZE);
-    if(cfg.size() > 15 && cfg.get_payload_ptr()[12] != 0xff) {
+    if (ret != nci::STATUS_OK) {
+        ESP_LOGW(TAG, "core_get_config(PMU) failed (NCI Status=0x%02X)", ret);
+    }
+    if(ret == nci::STATUS_OK && cfg.size() > 15 && cfg.get_payload_ptr()[12] != 0xff) {
       // UM11495 Section 13.1 - PMU_CFG (Tag 0xA00E)
       static const std::vector<uint8_t> PMU_CFG = {
           0x01,        // Number of parameters
