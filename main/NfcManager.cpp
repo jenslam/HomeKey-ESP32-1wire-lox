@@ -336,7 +336,7 @@ bool NfcManager::initializeReader() {
  */
 void NfcManager::startRetryTask() {
     if (m_retryTaskHandle == nullptr) {
-        xTaskCreateUniversal(retryTaskEntry, "nfc_retry_task", 4096, this, 5, &m_retryTaskHandle, 1);
+        xTaskCreateUniversal(retryTaskEntry, "nfc_retry_task", 4096, this, 4, &m_retryTaskHandle, 1);
     }
 }
 

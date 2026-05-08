@@ -109,18 +109,20 @@ bool Pn7160Reader::init() {
     m_fwMinor = 0;
     m_currentProtocol = 0;
 
-    BaseType_t ok = xTaskCreateUniversal(
-        taskRunnerEntry,
-        "pn7160_runner",
-        4096,
-        m_nci,
-        4,
-        &m_taskHandle,
-        1);
-    if (ok != pdPASS) {
-        ESP_LOGE(TAG, "Failed to start PN7160 task runner.");
-        stop();
-        return false;
+    if(!m_taskHandle){
+      BaseType_t ok = xTaskCreateUniversal(
+          taskRunnerEntry,
+          "pn7160_runner",
+          4096,
+          m_nci,
+          5,
+          &m_taskHandle,
+          1);
+      if (ok != pdPASS) {
+          ESP_LOGE(TAG, "Failed to start PN7160 task runner.");
+          stop();
+          return false;
+      }
     }
 
     ESP_LOGI(TAG, "PN7160 reader initialized.");
