@@ -113,7 +113,7 @@ bool Pn532Reader::exchangeApdu(const std::vector<uint8_t>& send,
                                uint32_t timeoutMs) {
     if (!m_frontend || send.size() > 255) return false;
     recv.clear();
-    pn532::Status status = m_frontend->InDataExchange(send, recv);
+    pn532::Status status = m_frontend->InDataExchange(send, recv, timeoutMs);
     if (status != pn532::SUCCESS) return false;
     // Strip PN532 status bytes (first 2 bytes of response)
     if (recv.size() >= 2) {
