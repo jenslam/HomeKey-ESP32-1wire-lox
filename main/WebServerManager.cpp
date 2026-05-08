@@ -1493,12 +1493,36 @@ esp_err_t WebServerManager::handleSaveCaptivePortalConfig(httpd_req_t *req) {
     cJSON_AddNumberToObject(nfcUpdate, "nfcPinsPreset", nfcPresetItem->valueint);
     cJSON_AddItemToObject(nfcUpdate, "nfcGpioPins", cJSON_Duplicate(nfcGpioPinsItem, true));
     if (nfcReaderTypeItem && cJSON_IsNumber(nfcReaderTypeItem)) {
+      if (nfcReaderTypeItem->valueint < 0 || nfcReaderTypeItem->valueint > 1) {
+        cJSON_Delete(nfcUpdate);
+        cJSON_Delete(obj);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid nfcReaderType\"}");
+        return ESP_FAIL;
+      }
       cJSON_AddNumberToObject(nfcUpdate, "nfcReaderType", nfcReaderTypeItem->valueint);
     }
     if (nfcIrqPinItem && cJSON_IsNumber(nfcIrqPinItem)) {
+      if (!GPIO_IS_VALID_GPIO(nfcIrqPinItem->valueint)) {
+        cJSON_Delete(nfcUpdate);
+        cJSON_Delete(obj);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid GPIO for 'nfcIrqPin'\"}");
+        return ESP_FAIL;
+      }
       cJSON_AddNumberToObject(nfcUpdate, "nfcIrqPin", nfcIrqPinItem->valueint);
     }
     if (nfcVenPinItem && cJSON_IsNumber(nfcVenPinItem)) {
+      if (!GPIO_IS_VALID_OUTPUT_GPIO(nfcVenPinItem->valueint)) {
+        cJSON_Delete(nfcUpdate);
+        cJSON_Delete(obj);
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Invalid GPIO for 'nfcVenPin'\"}");
+        return ESP_FAIL;
+      }
       cJSON_AddNumberToObject(nfcUpdate, "nfcVenPin", nfcVenPinItem->valueint);
     }
     char *nfcJson = cJSON_PrintUnformatted(nfcUpdate);
