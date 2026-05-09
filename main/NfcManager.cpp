@@ -335,18 +335,6 @@ bool NfcManager::initializeReader() {
 }
 
 /**
- * @brief Starts the NFC reconnection retry task if it is not already running.
- *
- * Creates and stores a task handle for the background retry loop; if a retry task
- * is already active, this function returns without side effects.
- */
-void NfcManager::startRetryTask() {
-    if (m_retryTaskHandle == nullptr) {
-        xTaskCreateUniversal(retryTaskEntry, "nfc_retry_task", 4096, this, 4, &m_retryTaskHandle, 1);
-    }
-}
-
-/**
  * @brief FreeRTOS task entry that dispatches to an instance's polling loop.
  *
  * This static function is used as a task entry point and calls the associated
@@ -356,41 +344,6 @@ void NfcManager::startRetryTask() {
  */
 void NfcManager::pollingTaskEntry(void* instance) {
     static_cast<NfcManager*>(instance)->pollingTask();
-}
-
-/**
- * @brief RTOS task entry point for the NFC retry task.
- *
- * This function is the C-style entry invoked by the RTOS; it expects a pointer
- * to an NfcManager instance (passed as void*) and transfers control to that
- * instance's retry task implementation.
- *
- * @param instance Pointer to an NfcManager instance, provided by the RTOS task creation call.
- */
-void NfcManager::retryTaskEntry(void* instance) {
-    static_cast<NfcManager*>(instance)->retryTask();
-}
-
-/**
- * @brief Continuously attempts to reconnect to the NFC reader and restores normal polling on success.
- *
- * Repeatedly calls reader initialization until it succeeds. When the reader is reinitialized,
- * the method resumes the polling task if present, clears the retry task handle, and terminates
- * the current retry task. On failure, it waits 5 seconds before trying again.
- */
-void NfcManager::retryTask() {
-    ESP_LOGI(TAG, "Starting NFC reconnection task...");
-    while (true) {
-        if (initializeReader()) {
-            ESP_LOGI(TAG, "Reader reconnected successfully.");
-            if (m_pollingTaskHandle) vTaskResume(m_pollingTaskHandle);
-        		break;
-        }
-        ESP_LOGW(TAG, "Reconnect attempt failed. Retrying in 5 seconds...");
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
-		m_retryTaskHandle = nullptr;
-		vTaskDelete(NULL);
 }
 
 /**
@@ -404,8 +357,15 @@ void NfcManager::retryTask() {
  */
 void NfcManager::pollingTask() {
     if (!initializeReader()) {
-      startRetryTask();
-      vTaskSuspend(NULL);
+    	while (true) {
+    		if (initializeReader()) {
+    			ESP_LOGI(TAG, "Reader reconnected successfully.");
+    			if (m_pollingTaskHandle) vTaskResume(m_pollingTaskHandle);
+    			break;
+    		}
+    		ESP_LOGW(TAG, "Reconnect attempt failed. Retrying in 5 seconds...");
+    		vTaskDelay(pdMS_TO_TICKS(5000));
+    	}
     }
 
     const uint16_t passiveTargetTimeoutMs = 500;
@@ -419,10 +379,17 @@ void NfcManager::pollingTask() {
 
     while (true) {
         if (!m_reader->healthCheck()) {
-            ESP_LOGE(TAG, "NFC reader is unresponsive. Attempting to reconnect...");
-            startRetryTask();
-            vTaskSuspend(NULL);
-            continue;
+					ESP_LOGE(TAG, "NFC reader is unresponsive. Attempting to reconnect...");
+					while (true) {
+						if (initializeReader()) {
+							ESP_LOGI(TAG, "Reader reconnected successfully.");
+							if (m_pollingTaskHandle) vTaskResume(m_pollingTaskHandle);
+							break;
+						}
+						ESP_LOGW(TAG, "Reconnect attempt failed. Retrying in 5 seconds...");
+						vTaskDelay(pdMS_TO_TICKS(5000));
+					}
+					continue;
         }
 
         std::vector<uint8_t> uid;

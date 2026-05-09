@@ -40,9 +40,6 @@ private:
     // --- Task Management ---
     static void pollingTaskEntry(void* instance);
     void pollingTask();
-    static void retryTaskEntry(void* instance);
-    void retryTask();
-    void startRetryTask();
 
     // --- HomeKey Auth Cache (precompute) ---
     struct AuthCtxCacheItem {
