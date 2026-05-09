@@ -144,11 +144,6 @@ void setup() {
     } else {
       nfcPins = {nfcGpioPinsPresets[miscConfig.nfcPinsPreset].gpioPins[1], nfcGpioPinsPresets[miscConfig.nfcPinsPreset].gpioPins[2], nfcGpioPinsPresets[miscConfig.nfcPinsPreset].gpioPins[3]};
     }
-    if (miscConfig.nfcReaderType == 1) {
-      if (miscConfig.nfcIrqPin != PIN_UNSET) nfcPins.push_back(miscConfig.nfcIrqPin);
-      if (miscConfig.nfcVenPin != PIN_UNSET) nfcPins.push_back(miscConfig.nfcVenPin);
-      std::sort(nfcPins.begin(), nfcPins.end());
-    }
     std::vector<uint8_t> pins_intersection;
     std::ranges::set_intersection(ethPins.begin(), ethPins.end(), nfcPins.begin(), nfcPins.end(), std::back_inserter(pins_intersection));
     if((!pins_intersection.empty() && miscConfig.ethSpiBus == SPI2_HOST)){
