@@ -4,10 +4,9 @@
 #include "pn7160.hpp"
 #include "portmacro.h"
 #include "spi.hpp"
-#include "soc/gpio_num.h"
 
 #include <array>
-#include <cstdint>
+#include <memory>
 #include <vector>
 
 /**
@@ -50,16 +49,13 @@ public:
     bool healthCheck() override;
     
 private:
-    static void taskRunnerEntry(void* arg);
     const std::array<uint8_t, 18> &m_ecpData;
     std::array<uint8_t, 4> m_gpioPins;
     uint8_t m_irqPin;
     uint8_t m_venPin;
 
-    PN7160_SPI* m_transport = nullptr;
-    PN7160_NCI* m_nci = nullptr;
-
-    TaskHandle_t m_taskHandle = nullptr;
+    std::unique_ptr<PN7160_SPI> m_transport;
+    std::unique_ptr<PN7160_NCI> m_nci;
 
     bool m_connected = false;
     uint32_t m_lastPresenceCheck = 0; // Tick count of last rf_iso_dep_presence_check()

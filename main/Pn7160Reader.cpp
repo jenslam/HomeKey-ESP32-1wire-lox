@@ -24,13 +24,6 @@ Pn7160Reader::~Pn7160Reader() {
     stop();
 }
 
-void Pn7160Reader::taskRunnerEntry(void* arg) {
-    auto* nci = static_cast<PN7160_NCI*>(arg);
-    if (nci) { 
-      nci->task_runner();
-    }
-}
-
 bool Pn7160Reader::init() {
     if (m_transport || m_nci) {
         stop();
@@ -45,8 +38,8 @@ bool Pn7160Reader::init() {
         .ven = static_cast<gpio_num_t>(m_venPin),
     };
 
-    m_transport = new PN7160_SPI(SPI2_HOST, spiCfg, 4);
-    m_nci = new PN7160_NCI(*m_transport);
+    m_transport = std::make_unique<PN7160_SPI>(SPI2_HOST, spiCfg, 4);
+    m_nci = std::make_unique<PN7160_NCI>(*m_transport);
 
     esp_err_t ret = m_nci->initialize();
     if (ret != ESP_OK) {
@@ -54,37 +47,42 @@ bool Pn7160Reader::init() {
         stop();
         return false;
     }
-    NciMessage cfg;
-    ret = m_nci->core_get_config({0x1, 0xA0, 0x0E}, cfg);
-    if (ret != nci::STATUS_OK) {
-        ESP_LOGW(TAG, "core_get_config(PMU) failed (NCI Status=0x%02X)", ret);
-    }
-    if(ret == nci::STATUS_OK && cfg.size() > 15 && cfg.get_payload_ptr()[12] != 0xff) {
-      // UM11495 Section 13.1 - PMU_CFG (Tag 0xA00E)
-      static const std::vector<uint8_t> PMU_CFG = {
-          0x01,        // Number of parameters
-          0xA0, 0x0E,  // ext. tag
-          0x0b,          // length
-          0x11,        // IRQ Enable: PVDD + temp sensor IRQs
-          0x01,        // RFU
-          0x01,        // Power and Clock Configuration, device on (CFG1)
-          0x01,        // Power and Clock Configuration, device off (CFG1)
-          0x00,        // RFU
-          0x00,        // DC-DC 0
-          0x00,        // DC-DC 1
-          0xFF,        // TXLDO (5.0V / 5.0V)
-          0x00,        // RFU
-          0x90,        // TXLDO check
-          0x0C,        // RFU
-      };
 
-      ret = m_nci->core_set_config(PMU_CFG);
+    {
+        NciMessage cfg;
+        const uint8_t kPmuQuery[] = {0x1, 0xA0, 0x0E};
+        ret = m_nci->core_get_config(kPmuQuery, cfg);
+        if (ret != nci::STATUS_OK) {
+            ESP_LOGW(TAG, "core_get_config(PMU) failed (NCI Status=0x%02X)", ret);
+        }
+        if (ret == nci::STATUS_OK && cfg.size() > 15 && cfg.get_payload_ptr()[12] != 0xff) {
+            // UM11495 Section 13.1 - PMU_CFG (Tag 0xA00E)
+            static const std::vector<uint8_t> PMU_CFG = {
+                0x01,        // Number of parameters
+                0xA0, 0x0E,  // ext. tag
+                0x0b,        // length
+                0x11,        // IRQ Enable: PVDD + temp sensor IRQs
+                0x01,        // RFU
+                0x01,        // Power and Clock Configuration, device on (CFG1)
+                0x01,        // Power and Clock Configuration, device off (CFG1)
+                0x00,        // RFU
+                0x00,        // DC-DC 0
+                0x00,        // DC-DC 1
+                0xFF,        // TXLDO (5.0V / 5.0V)
+                0x00,        // RFU
+                0x90,        // TXLDO check
+                0x0C,        // RFU
+            };
 
-      if (ret != nci::STATUS_OK) {
-          ESP_LOGE(TAG, "Failed to set PMU config (NCI Status=0x%02X)", ret);
-          return ESP_FAIL;
-      }
-      ESP_LOGI(TAG, "PMU Config set successfully");
+            ret = m_nci->core_set_config(PMU_CFG);
+
+            if (ret != nci::STATUS_OK) {
+                ESP_LOGE(TAG, "Failed to set PMU config (NCI Status=0x%02X)", ret);
+                stop();
+                return false;
+            }
+            ESP_LOGI(TAG, "PMU Config set successfully");
+        }
     }
 
     // NCI Core Spec v2.0 Section 6.1 - TOTAL_DURATION (Tag 0x00)
@@ -95,10 +93,10 @@ bool Pn7160Reader::init() {
         0x32,  // TOTAL_DURATION (low)
         0x00   // TOTAL_DURATION (high)
     };
-    
+
     ret = m_nci->core_set_config(CORE_CONFIG_TOTAL_DURATION_SOLO);
 
-    if (ret == ESP_FAIL) return ESP_FAIL;
+    if (ret == ESP_FAIL) return false;
     if (ret != nci::STATUS_OK) {
         ESP_LOGE(TAG, "Failed to set TOTAL_DURATION config (NCI Status=0x%02X)", ret);
     } else {
@@ -112,20 +110,11 @@ bool Pn7160Reader::init() {
     m_fwMinor = 0;
     m_currentProtocol = 0;
 
-    if(!m_taskHandle){
-      BaseType_t ok = xTaskCreateUniversal(
-          taskRunnerEntry,
-          "pn7160_runner",
-          4096,
-          m_nci,
-          5,
-          &m_taskHandle,
-          1);
-      if (ok != pdPASS) {
-          ESP_LOGE(TAG, "Failed to start PN7160 task runner.");
-          stop();
-          return false;
-      }
+    ret = m_nci->start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start PN7160 task runner.");
+        stop();
+        return false;
     }
 
     ESP_LOGI(TAG, "PN7160 reader initialized.");
@@ -134,30 +123,13 @@ bool Pn7160Reader::init() {
 
 void Pn7160Reader::stop() {
     if (m_nci) {
-        m_nci->shutdown();
+        m_nci->stop();
     }
-    if (m_taskHandle) {
-        int waitCount = 0;
-        while (m_nci && m_nci->is_task_running() && waitCount < 50) {
-            vTaskDelay(pdMS_TO_TICKS(10));
-            waitCount++;
-        }
-
-        if (m_nci && m_nci->is_task_running()) {
-            ESP_LOGE(TAG, "task_runner failed to exit cleanly! Forcing deletion.");
-            vTaskDelete(m_taskHandle);
-        }
-        m_taskHandle = nullptr;
-    }
-    if (m_nci) {
-        delete m_nci;
-        m_nci = nullptr;
-    }
+    m_nci.reset();
     if (m_transport) {
         m_transport->deinit();
-        delete m_transport;
-        m_transport = nullptr;
     }
+    m_transport.reset();
     m_connected = false;
     m_lastPresenceCheck = 0;
     m_lastHealthCheckTick = 0;
@@ -369,8 +341,11 @@ bool Pn7160Reader::exchangeApdu(const std::vector<uint8_t>& send,
         return false;
     }
     recv.clear();
-    esp_err_t ret = m_nci->send_apdu_sync(send, recv, timeoutMs);
-    return ret == nci::STATUS_OK;
+    if (const auto rsp = m_nci->send_apdu_sync(send, timeoutMs)) {
+        recv = rsp.value();
+        return true;
+    }
+    return false;
 }
 
 bool Pn7160Reader::healthCheck() {
@@ -387,7 +362,9 @@ bool Pn7160Reader::healthCheck() {
 
     TickType_t now = xTaskGetTickCount();
     if ((now - m_lastHealthCheckTick) * portTICK_PERIOD_MS >= kHealthCheckIntervalMs) {
-        NciMessage cmd{nci::PKT_MT_CTRL_COMMAND, nci::CORE_GID, nci::CORE_GET_CONFIG_OID, {0x01, 0x0}}, rsp;
+        const uint8_t kHealthPayload[] = {0x01, 0x0};
+        NciMessage cmd(nci::PKT_MT_CTRL_COMMAND, nci::CORE_GID, nci::CORE_GET_CONFIG_OID, kHealthPayload);
+        NciMessage rsp;
         esp_err_t ret = m_nci->send_command_wait_response(cmd, rsp, nci::PN7160_DEFAULT_TIMEOUT_MS);
         if (ret != nci::STATUS_OK) {
             ESP_LOGE(TAG, "Health check failed: NCI Status=0x%02X", ret);
@@ -405,7 +382,8 @@ bool Pn7160Reader::healthCheck() {
  bool Pn7160Reader::updateECP() {
     if (!m_nci) return false;
     NciMessage cfg;
-    esp_err_t ret = m_nci->core_get_config({0x1, 0xA0, 0x6C}, cfg);
+    const uint8_t kEcpQuery[] = {0x1, 0xA0, 0x6C};
+    esp_err_t ret = m_nci->core_get_config(kEcpQuery, cfg);
     if (ret != nci::STATUS_OK) {
       ESP_LOGE(TAG, "Failed to get config (NCI Status=0x%02X)", ret);
       return false;
