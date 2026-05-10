@@ -382,28 +382,25 @@ bool Pn7160Reader::healthCheck() {
  bool Pn7160Reader::updateECP() {
     if (!m_nci) return false;
     NciMessage cfg;
-    const uint8_t kEcpQuery[] = {0x1, 0xA0, 0x6C};
-    esp_err_t ret = m_nci->core_get_config(kEcpQuery, cfg);
-    if (ret != nci::STATUS_OK) {
+    constexpr uint8_t kEcpQuery[] = {0x1, 0xA0, 0x6C};
+    if (const esp_err_t ret = m_nci->core_get_config(kEcpQuery, cfg); ret != nci::STATUS_OK) {
       ESP_LOGE(TAG, "Failed to get config (NCI Status=0x%02X)", ret);
       return false;
     }
-    if(cfg.size() > 23){
-    if(!std::equal(cfg.get_payload_ptr() + 14, cfg.get_payload_ptr() + 22, m_ecpData.begin() + 10)){
+    if(cfg.size() > 23 &&
+        !std::equal(cfg.get_payload_ptr() + 14, cfg.get_payload_ptr() + 22, m_ecpData.begin() + 10)){
       std::vector<uint8_t> CFG = {
           0x01,
           0xA0, 0x6C,
           0x1E, static_cast<unsigned char>(m_ecpData.size() - 2)
       };
-      CFG.insert(CFG.end(), m_ecpData.begin(), m_ecpData.end() - 2);;
+      CFG.insert(CFG.end(), m_ecpData.begin(), m_ecpData.end() - 2);
       CFG.resize(34);
-      esp_err_t ret = m_nci->core_set_config(CFG);
 
-      if (ret != nci::STATUS_OK) {
+      if (const esp_err_t ret = m_nci->core_set_config(CFG); ret != nci::STATUS_OK) {
           ESP_LOGE(TAG, "Failed to set config (NCI Status=0x%02X)", ret);
         return false;
       }
-    }
     }
     return true;
 }
