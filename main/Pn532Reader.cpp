@@ -29,6 +29,7 @@ bool Pn532Reader::init() {
     const uint32_t versiondata = m_frontend->GetFirmwareVersion();
     if (!versiondata) {
         ESP_LOGE(TAG, "Error establishing PN532 connection.");
+        stop();
         return false;
     }
     ESP_LOGI(TAG, "Found chip PN532, Firmware ver. %d.%d",
