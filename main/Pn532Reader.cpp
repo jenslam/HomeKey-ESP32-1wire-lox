@@ -26,7 +26,7 @@ bool Pn532Reader::init() {
     }
 
     m_frontend->begin();
-    uint32_t versiondata = m_frontend->GetFirmwareVersion();
+    const uint32_t versiondata = m_frontend->GetFirmwareVersion();
     if (!versiondata) {
         ESP_LOGE(TAG, "Error establishing PN532 connection.");
         return false;
