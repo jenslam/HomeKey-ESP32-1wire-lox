@@ -66,6 +66,7 @@ private:
     TickType_t m_lastActivation = 0;
 
     static constexpr uint32_t kPresenceCheckIntervalMs = 500;
+    static constexpr uint32_t kActivationCooldownWindowMs = 300;
     static constexpr uint32_t kHealthCheckIntervalMs = 10000;
 
     static constexpr const char* TAG = "Pn7160Reader";

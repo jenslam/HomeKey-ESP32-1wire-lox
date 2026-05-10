@@ -205,7 +205,7 @@ bool Pn7160Reader::pollForTag(std::vector<uint8_t>& uid,
                 return false;
             }
             if(p[1] != nci::INTF_ISODEP){
-                if((xTaskGetTickCount() - m_lastActivation) < pdMS_TO_TICKS(400)){
+                if((xTaskGetTickCount() - m_lastActivation) < pdMS_TO_TICKS(kActivationCooldownWindowMs)){
                     ESP_LOGD(TAG, "Tag activated within cooldown window, ignoring!");
                     m_lastActivation = xTaskGetTickCount();
                     releaseTag();
