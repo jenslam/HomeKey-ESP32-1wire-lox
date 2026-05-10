@@ -14,11 +14,11 @@ Pn532Reader::~Pn532Reader() {
 bool Pn532Reader::init() {
     if (!m_transport) {
         m_transport = new pn532::SpiTransport(
-            (gpio_num_t)GPIO_NUM_NC,
-            (gpio_num_t)m_gpioPins[2],  // MISO
-            (gpio_num_t)m_gpioPins[3],  // MOSI
-            (gpio_num_t)m_gpioPins[1],  // SCK
-            (gpio_num_t)m_gpioPins[0]   // SS
+            GPIO_NUM_NC,
+            static_cast<gpio_num_t>(m_gpioPins[2]),  // MISO
+            static_cast<gpio_num_t>(m_gpioPins[3]),  // MOSI
+            static_cast<gpio_num_t>(m_gpioPins[1]),  // SCK
+            static_cast<gpio_num_t>(m_gpioPins[0])   // SS
         );
     }
     if (!m_frontend) {
