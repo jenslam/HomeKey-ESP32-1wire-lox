@@ -106,8 +106,9 @@ bool Pn7160Reader::init() {
     m_connected = true;
     m_lastPresenceCheck = 0;
     m_lastHealthCheckTick = xTaskGetTickCount();
-    m_fwMajor = 2;  // NCI 2.x major
-    m_fwMinor = 0;
+    const uint16_t fw_ver = m_nci->get_firmware_version();
+    m_fwMajor = fw_ver >> 8;
+    m_fwMinor = fw_ver & 0x0f;
     m_currentProtocol = 0;
 
     ret = m_nci->start();
