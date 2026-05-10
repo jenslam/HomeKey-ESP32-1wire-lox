@@ -8,6 +8,9 @@
 		nfcGpioPins: [number, number, number, number];
 		nfcPinsPreset: number;
 		nfcPresets: NfcGpioPinsPreset | null;
+		nfcReaderType: number;
+		nfcIrqPin: number;
+		nfcVenPin: number;
 		ethernetEnabled: boolean;
 		ethActivePreset: number;
 		ethPhyType: number;
@@ -19,8 +22,11 @@
 		loading?: boolean;
     nfcFastPollingEnabled: boolean;
 		onNfcPresetChange: (preset: number) => void;
-		onEthPresetChange: (preset: number) => void;
+		onNfcReaderTypeChange: (type: number) => void;
 		onNfcPinsChange: (pins: [number, number, number, number]) => void;
+		onNfcIrqPinChange: (pin: number) => void;
+		onNfcVenPinChange: (pin: number) => void;
+		onEthPresetChange: (preset: number) => void;
 		onEthernetToggle: (enabled: boolean) => void;
 		onEthPhyTypeChange: (phyType: number) => void;
 		onEthSpiBusChange: (bus: number) => void;
@@ -32,6 +38,9 @@
 		nfcGpioPins,
 		nfcPinsPreset,
 		nfcPresets,
+		nfcReaderType,
+		nfcIrqPin,
+		nfcVenPin,
 		ethernetEnabled,
 		ethActivePreset,
 		ethPhyType,
@@ -43,8 +52,11 @@
 		nfcConnected = false,
 		loading = false,
 		onNfcPresetChange,
-		onEthPresetChange,
+		onNfcReaderTypeChange,
 		onNfcPinsChange,
+		onNfcIrqPinChange,
+		onNfcVenPinChange,
+		onEthPresetChange,
 		onEthernetToggle,
 		onEthPhyTypeChange,
 		onEthSpiBusChange,
@@ -65,6 +77,12 @@
 		const select = event.target as HTMLSelectElement;
 		const preset = parseInt(select.value, 10);
 		onNfcPresetChange(preset);
+	}
+
+	function handleNfcReaderTypeChange(event: Event) {
+		const select = event.target as HTMLSelectElement;
+		const type = parseInt(select.value, 10);
+		onNfcReaderTypeChange(type);
 	}
 
 	function handleEthPresetChange(event: Event) {
@@ -96,10 +114,10 @@
   {#if ethernetEnabled && !currentEthChip()?.emac}
     <SpiEthernetNote spiNumBuses={ethConfig?.numSpiBuses ?? 1} selectedBus={ethSpiBus} />
   {/if}
-	<!-- PN532 NFC Reader -->
+	<!-- NFC Reader -->
 	<div class="py-2 px-3 bg-base-100 rounded-lg">
 		<div class="flex items-center justify-between mb-2">
-			<p class="text-sm font-medium">PN532 NFC Reader</p>
+			<p class="text-sm font-medium">NFC Reader</p>
 			{#if nfcConnected !== undefined && !isCaptivePortal}
 				<div class="flex items-center gap-2">
 					<span class="relative flex h-2.5 w-2.5">
@@ -115,6 +133,21 @@
 					</span>
 				</div>
 			{/if}
+		</div>
+		<div class="form-control mb-2">
+			<label class="label" for="nfcReaderType">
+				<span class="label-text text-xs">Reader Type</span>
+			</label>
+			<select
+				id="nfcReaderType"
+				value={nfcReaderType}
+				onchange={handleNfcReaderTypeChange}
+				class="select select-sm select-bordered w-full"
+				disabled={loading}
+			>
+				<option value={0}>PN532</option>
+				<option value={1}>PN7161</option>
+			</select>
 		</div>
 		<div class="form-control mb-2">
 			<label class="label" for="nfcPreset">
@@ -189,10 +222,40 @@
 				/>
 			</div>
 		</div>
+		{#if nfcReaderType === 1}
+			<div class="grid grid-cols-2 gap-2 mb-2">
+				<div class="form-control">
+					<label class="label" for="nfcIrqPin">
+						<span class="label-text text-xs">IRQ Pin</span>
+					</label>
+					<input
+						id="nfcIrqPin"
+						type="number"
+						disabled={nfcPinsPreset !== 255 || loading}
+						value={nfcIrqPin}
+						onchange={(e) => onNfcIrqPinChange(parseInt((e.target as HTMLInputElement).value, 10))}
+						class="input input-sm input-bordered w-full"
+					/>
+				</div>
+				<div class="form-control">
+					<label class="label" for="nfcVenPin">
+						<span class="label-text text-xs">VEN Pin</span>
+					</label>
+					<input
+						id="nfcVenPin"
+						type="number"
+						disabled={nfcPinsPreset !== 255 || loading}
+						value={nfcVenPin}
+						onchange={(e) => onNfcVenPinChange(parseInt((e.target as HTMLInputElement).value, 10))}
+						class="input input-sm input-bordered w-full"
+					/>
+				</div>
+			</div>
+		{/if}
     <div class="flex items-center justify-between py-2 px-3 bg-base-200 rounded-lg">
       <div>
         <p class="text-sm font-medium">Fast NFC Polling</p>
-        <p class="text-xs text-base-content/60">{"Reduces the delay (100ms -> 5ms) after each PN532 poll cycle for quicker follow-up detection."}</p>
+        <p class="text-xs text-base-content/60">Reduces the delay between poll cycles for quicker tag detection.</p>
       </div>
       <input
         type="checkbox"

@@ -361,13 +361,16 @@
 						<div class="space-y-4">
 							<div>
 								<h3 class="text-sm font-semibold">Hardware Configuration</h3>
-								<p class="text-xs text-base-content/60">Configure GPIO pins for PN532 NFC reader and optional Ethernet connectivity.</p>
+								<p class="text-xs text-base-content/60">Configure GPIO pins for NFC reader and optional Ethernet connectivity.</p>
 							</div>
 
 							<HardwareConfig
 								nfcGpioPins={miscConfig.nfcGpioPins}
 								nfcPinsPreset={miscConfig.nfcPinsPreset}
 								nfcPresets={nfcPresetsList}
+								nfcReaderType={miscConfig.nfcReaderType}
+								nfcIrqPin={miscConfig.nfcIrqPin}
+								nfcVenPin={miscConfig.nfcVenPin}
 								ethernetEnabled={miscConfig.ethernetEnabled}
 								ethActivePreset={miscConfig.ethActivePreset}
 								ethPhyType={miscConfig.ethPhyType}
@@ -378,8 +381,11 @@
 								nfcConnected={nfcConnected}
                 nfcFastPollingEnabled={miscConfig.nfcFastPollingEnabled}
 								onNfcPresetChange={handleNfcPresetChange}
-								onEthPresetChange={handleEthPresetChange}
+								onNfcReaderTypeChange={(type) => miscConfig.nfcReaderType = type}
 								onNfcPinsChange={(pins) => miscConfig.nfcGpioPins = pins}
+								onNfcIrqPinChange={(pin) => miscConfig.nfcIrqPin = pin}
+								onNfcVenPinChange={(pin) => miscConfig.nfcVenPin = pin}
+								onEthPresetChange={handleEthPresetChange}
 								onEthernetToggle={(enabled) => miscConfig.ethernetEnabled = enabled}
 								onEthPhyTypeChange={(phyType) => miscConfig.ethPhyType = phyType}
 								onEthSpiBusChange={(bus) => miscConfig.ethSpiBus = bus}

@@ -25,3 +25,6 @@
 [submodule "components/pn532_hal"]
 	path = components/pn532_hal
 	url = https://github.com/rednblkx/esp-hal-pn532.git
+[submodule "components/pn7160"]
+	path = components/pn7160
+	url = https://github.com/rednblkx/pn7160.git

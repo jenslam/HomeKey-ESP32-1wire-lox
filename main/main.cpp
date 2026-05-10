@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include "ConsoleLogSinker.h"
@@ -124,6 +125,10 @@ void setup() {
     ESP_LOGI(TAG, "NFC GPIO pins preset: Custom");
     ESP_LOGI(TAG, "NFC Custom GPIO pins: %d, %d, %d, %d", miscConfig.nfcGpioPins[0], miscConfig.nfcGpioPins[1], miscConfig.nfcGpioPins[2], miscConfig.nfcGpioPins[3]);
   }
+  ESP_LOGI(TAG, "NFC reader type: %s", miscConfig.nfcReaderType == 0 ? "PN532" : "PN7160");
+  if (miscConfig.nfcReaderType == 1) {
+    ESP_LOGI(TAG, "NFC IRQ pin: %d, VEN pin: %d", miscConfig.nfcIrqPin, miscConfig.nfcVenPin);
+  }
   readerDataManager->begin();
   if(miscConfig.ethernetEnabled){
     std::vector<uint8_t> ethPins;
@@ -149,9 +154,9 @@ void setup() {
     #endif
     else {
       if(miscConfig.ethSpiBus == SPI2_HOST){
-        ESP_LOGE(TAG, "Ethernet enabled on SPI2 Bus, PN532 has to use the same GPIO pins as Ethernet");
+        ESP_LOGE(TAG, "Ethernet enabled on SPI2 Bus, NFC reader has to use the same GPIO pins as Ethernet");
       } else {
-        ESP_LOGE(TAG, "Ethernet enabled on SPI3 Bus, PN532 cannot use the same GPIO pins as Ethernet");
+        ESP_LOGE(TAG, "Ethernet enabled on SPI3 Bus, NFC reader cannot use the same GPIO pins as Ethernet");
         for(auto& pin : pins_intersection){
           ESP_LOGE(TAG, "GPIO Intersection: %d", pin);
         }
@@ -161,6 +166,9 @@ void setup() {
   nfc_init:
     nfcManager = std::make_unique<NfcManager>(*readerDataManager,
                                 miscConfig.nfcPinsPreset == PIN_UNSET ? miscConfig.nfcGpioPins : nfcGpioPinsPresets[miscConfig.nfcPinsPreset].gpioPins,
+                                miscConfig.nfcReaderType,
+                                miscConfig.nfcIrqPin,
+                                miscConfig.nfcVenPin,
                                 miscConfig.hkAuthPrecomputeEnabled,
                                 miscConfig.nfcFastPollingEnabled);
     nfcManager->begin();
