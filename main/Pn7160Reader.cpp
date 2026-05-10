@@ -260,7 +260,8 @@ bool Pn7160Reader::pollForTag(std::vector<uint8_t>& uid,
             sak = 0;
             if (selResLen > 0) {
                 if (!need(selResLen)) return false;
-                sak = t[tOff++];
+                sak = t[tOff];
+                tOff += selResLen;
             }
 
             // HRx Length (consume, ignore)
