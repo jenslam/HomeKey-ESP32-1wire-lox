@@ -25,6 +25,7 @@ public:
 		Pn7160Reader(const Pn7160Reader&) = delete;
 		Pn7160Reader& operator=(const Pn7160Reader&) = delete;
 		Pn7160Reader(Pn7160Reader&&) = delete;
+		Pn7160Reader& operator=(Pn7160Reader&&) = delete;
 
     bool init() override;
     void stop() override;

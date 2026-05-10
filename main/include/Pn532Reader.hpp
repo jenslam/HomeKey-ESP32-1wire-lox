@@ -22,6 +22,7 @@ public:
 		Pn532Reader(const Pn532Reader&) = delete;
 		Pn532Reader& operator=(const Pn532Reader&) = delete;
 		Pn532Reader(Pn532Reader&&) = delete;
+		Pn532Reader& operator=(Pn532Reader&&) = delete;
 
 
     bool init() override;
