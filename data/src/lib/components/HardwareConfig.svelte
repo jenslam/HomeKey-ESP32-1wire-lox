@@ -146,7 +146,7 @@
 				disabled={loading}
 			>
 				<option value={0}>PN532</option>
-				<option value={1}>PN7160</option>
+				<option value={1}>PN7161</option>
 			</select>
 		</div>
 		<div class="form-control mb-2">
