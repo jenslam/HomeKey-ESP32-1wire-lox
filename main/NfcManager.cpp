@@ -300,7 +300,7 @@ void NfcManager::updateEcpData() {
     if (readerGid.size() == 8) {
         memcpy(m_ecpData.data() + 8, readerGid.data(), 8);
         Utils::crc16a(m_ecpData.data(), 16, m_ecpData.data() + 16);
-        if(m_nfcReaderType == 1){
+        if(m_nfcReaderType == 1 && m_reader){
           m_reader->updateECP();
         }
     } else {
