@@ -87,6 +87,8 @@
 			const presetData = nfcPresets.presets[preset];
 			if (presetData) {
 				config.nfcGpioPins = [presetData.gpioPins[0], presetData.gpioPins[1], presetData.gpioPins[2], presetData.gpioPins[3]];
+				config.nfcIrqPin = presetData.irqPin;
+				config.nfcVenPin = presetData.venPin;
 			}
 		}
 	}

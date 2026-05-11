@@ -83,6 +83,7 @@
 		const select = event.target as HTMLSelectElement;
 		const type = parseInt(select.value, 10);
 		onNfcReaderTypeChange(type);
+		onNfcPresetChange(255);
 	}
 
 	function handleEthPresetChange(event: Event) {
@@ -162,7 +163,9 @@
 			>
 				{#if nfcPresets?.presets}
 					{#each nfcPresets.presets as preset, i}
-						<option value={i}>{preset.name}</option>
+						{#if preset.type === nfcReaderType}
+							<option value={i}>{preset.name}</option>
+						{/if}
 					{/each}
 				{/if}
 				<option value={255}>Custom</option>

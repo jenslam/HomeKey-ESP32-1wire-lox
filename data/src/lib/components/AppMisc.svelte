@@ -61,9 +61,13 @@
 					presetData.gpioPins[2],
 					presetData.gpioPins[3],
 				];
+				miscConfig.nfcIrqPin = presetData.irqPin;
+				miscConfig.nfcVenPin = presetData.venPin;
 			}
 		} else if (preset === 255 && misc) {
 			miscConfig.nfcGpioPins = misc.nfcGpioPins;
+			miscConfig.nfcIrqPin = misc.nfcIrqPin;
+			miscConfig.nfcVenPin = misc.nfcVenPin;
 		}
 	};
 

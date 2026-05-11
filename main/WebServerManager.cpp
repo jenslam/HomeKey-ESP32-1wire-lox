@@ -637,10 +637,13 @@ esp_err_t WebServerManager::handleGetNfcPresets(httpd_req_t *req) {
   for (auto &&v : nfcGpioPinsPresets) {
     cJSON *preset = cJSON_CreateObject();
     cJSON_AddStringToObject(preset, "name", v.name.c_str());
+    cJSON_AddNumberToObject(preset, "type", v.type);
     cJSON* gpioArray = cJSON_AddArrayToObject(preset, "gpioPins");
     for (auto &&pin : v.gpioPins) {
       cJSON_AddItemToArray(gpioArray, cJSON_CreateNumber(pin));
     }
+    cJSON_AddNumberToObject(preset, "irqPin", v.irqPin);
+    cJSON_AddNumberToObject(preset, "venPin", v.venPin);
     cJSON_AddItemToArray(presetsArray, preset);
   }
   cJSON *nfcPresets = cJSON_CreateObject();

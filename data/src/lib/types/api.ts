@@ -314,7 +314,10 @@ export interface EthConfig {
 export interface NfcGpioPinsPreset {
   presets: {
     name: string;
+    type: number;
     gpioPins: number[];
+    irqPin: number;
+    venPin: number;
   }[];
 }
 

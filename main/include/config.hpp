@@ -48,15 +48,35 @@ static const std::string platform_create_id_string(void) {
 
 struct nfcGpioPins_t {
   std::string name;
+  uint8_t type;
   std::array<uint8_t, 4> gpioPins;
+#ifdef CONFIG_IDF_TARGET_ESP32C6
+  uint8_t irqPin = 23;
+  uint8_t venPin = 22;
+#elif CONFIG_IDF_TARGET_ESP32S3
+  uint8_t irqPin = 8;
+  uint8_t venPin = 9;
+#elif CONFIG_IDF_TARGET_ESP32C3
+  uint8_t irqPin = 0;
+  uint8_t venPin = 1;
+#elif CONFIG_IDF_TARGET_ESP32
+  uint8_t irqPin = 10;
+  uint8_t venPin = 9;
+#else
+  uint8_t irqPin = 255;
+  uint8_t venPin = 255;
+#endif
 };
 
-static const std::array<nfcGpioPins_t,4> nfcGpioPinsPresets = {
+static const std::array<nfcGpioPins_t,5> nfcGpioPinsPresets = {
     {
-    {"Default", {SS_PIN, SCK_PIN, MISO_PIN, MOSI_PIN}},
-    {"@lollokara's board", {6, 5, 4, 7}},
-    {"CASmo-NFC", {5, 18, 19, 23}},
-    {"CASmo-NFC-MB-ETH", {5, 14, 12, 13}}
+      // PN532
+    {"Default", 0, {SS_PIN, SCK_PIN, MISO_PIN, MOSI_PIN}},
+    {"@lollokara's board", 0, {6, 5, 4, 7}},
+    {"CASmo-NFC", 0, {5, 18, 19, 23}},
+    {"CASmo-NFC-MB-ETH", 0, {5, 14, 12, 13}},
+      // PN7161
+    {"Default", 1, {SS_PIN, SCK_PIN, MISO_PIN, MOSI_PIN}}
     }
 };
 
