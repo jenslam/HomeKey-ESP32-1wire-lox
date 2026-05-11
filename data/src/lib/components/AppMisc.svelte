@@ -113,9 +113,37 @@
 		}
 	};
 
+	// Watch ethActivePreset from the original config and apply preset on load
 	$effect(() => {
 		if (misc?.ethActivePreset !== 255 && misc) {
 			handleEthPresetChange(misc.ethActivePreset);
+		}
+	});
+
+	// Watch user-driven ethActivePreset changes and apply preset
+	$effect(() => {
+		const preset = miscConfig.ethActivePreset;
+		if (preset !== undefined) {
+			handleEthPresetChange(preset);
+		}
+	});
+
+	// Watch nfcPinsPreset and apply/restore pins
+	$effect(() => {
+		const preset = miscConfig.nfcPinsPreset;
+		if (preset !== undefined) {
+			handleNfcPresetChange(preset);
+		}
+	});
+
+	// Watch nfcReaderType and reset preset to custom (255)
+	// svelte-ignore state_referenced_locally
+	let prevNfcReaderType = $state(miscConfig.nfcReaderType);
+	$effect(() => {
+		const current = miscConfig.nfcReaderType;
+		if (current !== prevNfcReaderType) {
+			prevNfcReaderType = current;
+			miscConfig.nfcPinsPreset = 255;
 		}
 	});
 </script>
@@ -369,32 +397,21 @@
 							</div>
 
 							<HardwareConfig
-								nfcGpioPins={miscConfig.nfcGpioPins}
-								nfcPinsPreset={miscConfig.nfcPinsPreset}
+								bind:nfcGpioPins={miscConfig.nfcGpioPins}
+								bind:nfcPinsPreset={miscConfig.nfcPinsPreset}
 								nfcPresets={nfcPresetsList}
-								nfcReaderType={miscConfig.nfcReaderType}
-								nfcIrqPin={miscConfig.nfcIrqPin}
-								nfcVenPin={miscConfig.nfcVenPin}
-								ethernetEnabled={miscConfig.ethernetEnabled}
-								ethActivePreset={miscConfig.ethActivePreset}
-								ethPhyType={miscConfig.ethPhyType}
-								ethSpiBus={miscConfig.ethSpiBus}
-								ethRmiiConfig={miscConfig.ethRmiiConfig}
-								ethSpiConfig={miscConfig.ethSpiConfig}
+								bind:nfcReaderType={miscConfig.nfcReaderType}
+								bind:nfcIrqPin={miscConfig.nfcIrqPin}
+								bind:nfcVenPin={miscConfig.nfcVenPin}
+								bind:ethernetEnabled={miscConfig.ethernetEnabled}
+								bind:ethActivePreset={miscConfig.ethActivePreset}
+								bind:ethPhyType={miscConfig.ethPhyType}
+								bind:ethSpiBus={miscConfig.ethSpiBus}
+								bind:ethRmiiConfig={miscConfig.ethRmiiConfig}
+								bind:ethSpiConfig={miscConfig.ethSpiConfig}
 								ethConfig={ethConfig}
 								nfcConnected={nfcConnected}
-                nfcFastPollingEnabled={miscConfig.nfcFastPollingEnabled}
-								onNfcPresetChange={handleNfcPresetChange}
-								onNfcReaderTypeChange={(type) => miscConfig.nfcReaderType = type}
-								onNfcPinsChange={(pins) => miscConfig.nfcGpioPins = pins}
-								onNfcIrqPinChange={(pin) => miscConfig.nfcIrqPin = pin}
-								onNfcVenPinChange={(pin) => miscConfig.nfcVenPin = pin}
-								onEthPresetChange={handleEthPresetChange}
-								onEthernetToggle={(enabled) => miscConfig.ethernetEnabled = enabled}
-								onEthPhyTypeChange={(phyType) => miscConfig.ethPhyType = phyType}
-								onEthSpiBusChange={(bus) => miscConfig.ethSpiBus = bus}
-								onEthRmiiConfigChange={(cfg) => miscConfig.ethRmiiConfig = cfg}
-								onEthSpiConfigChange={(cfg) => miscConfig.ethSpiConfig = cfg}
+								bind:nfcFastPollingEnabled={miscConfig.nfcFastPollingEnabled}
 							/>
 
 							<!-- HomeSpan -->
