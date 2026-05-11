@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { EthConfig, NfcGpioPinsPreset } from '$lib/types/api';
-    import { derived } from 'svelte/store';
 	import SpiEthernetNote from './SpiEthernetNote.svelte';
 	import { route } from 'sv-router/generated';
 
@@ -20,48 +19,26 @@
 		ethConfig: EthConfig | null;
 		nfcConnected?: boolean;
 		loading?: boolean;
-    nfcFastPollingEnabled: boolean;
-		onNfcPresetChange: (preset: number) => void;
-		onNfcReaderTypeChange: (type: number) => void;
-		onNfcPinsChange: (pins: [number, number, number, number]) => void;
-		onNfcIrqPinChange: (pin: number) => void;
-		onNfcVenPinChange: (pin: number) => void;
-		onEthPresetChange: (preset: number) => void;
-		onEthernetToggle: (enabled: boolean) => void;
-		onEthPhyTypeChange: (phyType: number) => void;
-		onEthSpiBusChange: (bus: number) => void;
-		onEthRmiiConfigChange: (config: [number, number, number, number, number]) => void;
-		onEthSpiConfigChange: (config: [number, number, number, number, number, number, number]) => void;
+		nfcFastPollingEnabled?: boolean;
 	}
 
 	let {
-		nfcGpioPins,
-		nfcPinsPreset,
+		nfcGpioPins = $bindable(),
+		nfcPinsPreset = $bindable(),
 		nfcPresets,
-		nfcReaderType,
-		nfcIrqPin,
-		nfcVenPin,
-		ethernetEnabled,
-		ethActivePreset,
-		ethPhyType,
-		ethSpiBus,
-		ethRmiiConfig,
-		ethSpiConfig,
+		nfcReaderType = $bindable(),
+		nfcIrqPin = $bindable(),
+		nfcVenPin = $bindable(),
+		ethernetEnabled = $bindable(),
+		ethActivePreset = $bindable(),
+		ethPhyType = $bindable(),
+		ethSpiBus = $bindable(),
+		ethRmiiConfig = $bindable(),
+		ethSpiConfig = $bindable(),
 		ethConfig,
-    nfcFastPollingEnabled,
+		nfcFastPollingEnabled = $bindable(false),
 		nfcConnected = false,
 		loading = false,
-		onNfcPresetChange,
-		onNfcReaderTypeChange,
-		onNfcPinsChange,
-		onNfcIrqPinChange,
-		onNfcVenPinChange,
-		onEthPresetChange,
-		onEthernetToggle,
-		onEthPhyTypeChange,
-		onEthSpiBusChange,
-		onEthRmiiConfigChange,
-		onEthSpiConfigChange,
 	}: Props = $props();
 
 	const isCaptivePortal = $derived(route.pathname.startsWith('/captive-portal'));
@@ -72,43 +49,6 @@
 		}
 		return null;
 	});
-
-	function handleNfcPresetChange(event: Event) {
-		const select = event.target as HTMLSelectElement;
-		const preset = parseInt(select.value, 10);
-		onNfcPresetChange(preset);
-	}
-
-	function handleNfcReaderTypeChange(event: Event) {
-		const select = event.target as HTMLSelectElement;
-		const type = parseInt(select.value, 10);
-		onNfcReaderTypeChange(type);
-		onNfcPresetChange(255);
-	}
-
-	function handleEthPresetChange(event: Event) {
-		const select = event.target as HTMLSelectElement;
-		const preset = parseInt(select.value, 10);
-		onEthPresetChange(preset);
-	}
-
-	function updateNfcPin(index: number, value: number) {
-		const newPins: [number, number, number, number] = [...nfcGpioPins] as [number, number, number, number];
-		newPins[index] = value;
-		onNfcPinsChange(newPins);
-	}
-
-	function updateRmiiConfig(index: number, value: number) {
-		const newConfig: [number, number, number, number, number] = [...ethRmiiConfig] as [number, number, number, number, number];
-		newConfig[index] = value;
-		onEthRmiiConfigChange(newConfig);
-	}
-
-	function updateSpiConfig(index: number, value: number) {
-		const newConfig: [number, number, number, number, number, number, number] = [...ethSpiConfig] as [number, number, number, number, number, number, number];
-		newConfig[index] = value;
-		onEthSpiConfigChange(newConfig);
-	}
 </script>
 
 <div class="space-y-4">
@@ -141,8 +81,7 @@
 			</label>
 			<select
 				id="nfcReaderType"
-				value={nfcReaderType}
-				onchange={handleNfcReaderTypeChange}
+				bind:value={nfcReaderType}
 				class="select select-sm select-bordered w-full"
 				disabled={loading}
 			>
@@ -156,8 +95,7 @@
 			</label>
 			<select
 				id="nfcPreset"
-				value={nfcPinsPreset}
-				onchange={handleNfcPresetChange}
+				bind:value={nfcPinsPreset}
 				class="select select-sm select-bordered w-full"
 				disabled={loading}
 			>
@@ -180,8 +118,7 @@
 					id="nfcSsPin"
 					type="number"
 					disabled={nfcPinsPreset !== 255 || loading}
-					value={nfcGpioPins[0]}
-					onchange={(e) => updateNfcPin(0, parseInt((e.target as HTMLInputElement).value, 10))}
+					bind:value={nfcGpioPins[0]}
 					class="input input-sm input-bordered w-full"
 				/>
 			</div>
@@ -193,8 +130,7 @@
 					id="nfcSckPin"
 					type="number"
 					disabled={nfcPinsPreset !== 255 || loading}
-					value={nfcGpioPins[1]}
-					onchange={(e) => updateNfcPin(1, parseInt((e.target as HTMLInputElement).value, 10))}
+					bind:value={nfcGpioPins[1]}
 					class="input input-sm input-bordered w-full"
 				/>
 			</div>
@@ -206,8 +142,7 @@
 					id="nfcMisoPin"
 					type="number"
 					disabled={nfcPinsPreset !== 255 || loading}
-					value={nfcGpioPins[2]}
-					onchange={(e) => updateNfcPin(2, parseInt((e.target as HTMLInputElement).value, 10))}
+					bind:value={nfcGpioPins[2]}
 					class="input input-sm input-bordered w-full"
 				/>
 			</div>
@@ -219,8 +154,7 @@
 					id="nfcMosiPin"
 					type="number"
 					disabled={nfcPinsPreset !== 255 || loading}
-					value={nfcGpioPins[3]}
-					onchange={(e) => updateNfcPin(3, parseInt((e.target as HTMLInputElement).value, 10))}
+					bind:value={nfcGpioPins[3]}
 					class="input input-sm input-bordered w-full"
 				/>
 			</div>
@@ -235,8 +169,7 @@
 						id="nfcIrqPin"
 						type="number"
 						disabled={nfcPinsPreset !== 255 || loading}
-						value={nfcIrqPin}
-						onchange={(e) => onNfcIrqPinChange(parseInt((e.target as HTMLInputElement).value, 10))}
+						bind:value={nfcIrqPin}
 						class="input input-sm input-bordered w-full"
 					/>
 				</div>
@@ -248,8 +181,7 @@
 						id="nfcVenPin"
 						type="number"
 						disabled={nfcPinsPreset !== 255 || loading}
-						value={nfcVenPin}
-						onchange={(e) => onNfcVenPinChange(parseInt((e.target as HTMLInputElement).value, 10))}
+						bind:value={nfcVenPin}
 						class="input input-sm input-bordered w-full"
 					/>
 				</div>
@@ -264,6 +196,7 @@
         type="checkbox"
         bind:checked={nfcFastPollingEnabled}
         class="toggle toggle-primary toggle-sm"
+		disabled={loading}
       />
     </div>
 	</div>
@@ -279,8 +212,7 @@
 			</div>
 			<input
 				type="checkbox"
-				checked={ethernetEnabled}
-				onchange={(e) => onEthernetToggle((e.target as HTMLInputElement).checked)}
+				bind:checked={ethernetEnabled}
 				class="toggle toggle-primary toggle-sm"
 				disabled={loading}
 			/>
@@ -293,8 +225,7 @@
 				</label>
 				<select
 					id="ethPreset"
-					value={ethActivePreset}
-					onchange={handleEthPresetChange}
+					bind:value={ethActivePreset}
 					class="select select-sm select-bordered w-full"
 					disabled={loading}
 				>
@@ -313,8 +244,7 @@
 				</label>
 				<select
 					id="ethPhyType"
-					value={ethPhyType}
-					onchange={(e) => onEthPhyTypeChange(parseInt((e.target as HTMLSelectElement).value, 10))}
+					bind:value={ethPhyType}
 					disabled={ethActivePreset !== 255 || loading}
 					class="select select-sm select-bordered w-full"
 				>
@@ -337,8 +267,7 @@
 							<input
 								id="ethPhyAddr"
 								type="number"
-								value={ethRmiiConfig[0]}
-								onchange={(e) => updateRmiiConfig(0, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethRmiiConfig[0]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -350,8 +279,7 @@
 							<input
 								id="ethPinMdc"
 								type="number"
-								value={ethRmiiConfig[1]}
-								onchange={(e) => updateRmiiConfig(1, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethRmiiConfig[1]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -363,8 +291,7 @@
 							<input
 								id="ethPinMdio"
 								type="number"
-								value={ethRmiiConfig[2]}
-								onchange={(e) => updateRmiiConfig(2, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethRmiiConfig[2]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -376,8 +303,7 @@
 							<input
 								id="ethPinPower"
 								type="number"
-								value={ethRmiiConfig[3]}
-								onchange={(e) => updateRmiiConfig(3, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethRmiiConfig[3]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -388,8 +314,7 @@
 							</label>
 							<select
 								id="ethRmiiClock"
-								value={ethRmiiConfig[4]}
-								onchange={(e) => updateRmiiConfig(4, parseInt((e.target as HTMLSelectElement).value, 10))}
+								bind:value={ethRmiiConfig[4]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="select select-sm select-bordered w-full"
 							>
@@ -411,8 +336,7 @@
 							</label>
 							<select
 								id="ethSpiBus"
-								value={ethSpiBus}
-								onchange={(e) => onEthSpiBusChange(parseInt((e.target as HTMLSelectElement).value, 10))}
+								bind:value={ethSpiBus}
 								disabled={ethActivePreset !== 255 || loading || ethConfig?.numSpiBuses === 1}
 								class="select select-sm select-bordered w-full"
 							>
@@ -429,8 +353,7 @@
 							<input
 								id="ethSpiFreq"
 								type="number"
-								value={ethSpiConfig[0]}
-								onchange={(e) => updateSpiConfig(0, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[0]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -442,8 +365,7 @@
 							<input
 								id="ethCsPin"
 								type="number"
-								value={ethSpiConfig[1]}
-								onchange={(e) => updateSpiConfig(1, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[1]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -455,8 +377,7 @@
 							<input
 								id="ethIrqPin"
 								type="number"
-								value={ethSpiConfig[2]}
-								onchange={(e) => updateSpiConfig(2, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[2]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -468,8 +389,7 @@
 							<input
 								id="ethRstPin"
 								type="number"
-								value={ethSpiConfig[3]}
-								onchange={(e) => updateSpiConfig(3, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[3]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -481,8 +401,7 @@
 							<input
 								id="ethSckPin"
 								type="number"
-								value={ethSpiConfig[4]}
-								onchange={(e) => updateSpiConfig(4, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[4]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -494,8 +413,7 @@
 							<input
 								id="ethMisoPin"
 								type="number"
-								value={ethSpiConfig[5]}
-								onchange={(e) => updateSpiConfig(5, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[5]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
@@ -507,8 +425,7 @@
 							<input
 								id="ethMosiPin"
 								type="number"
-								value={ethSpiConfig[6]}
-								onchange={(e) => updateSpiConfig(6, parseInt((e.target as HTMLInputElement).value, 10))}
+								bind:value={ethSpiConfig[6]}
 								disabled={ethActivePreset !== 255 || loading}
 								class="input input-sm input-bordered w-full"
 							/>
