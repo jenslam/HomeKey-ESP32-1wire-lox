@@ -1541,3 +1541,77 @@ std::vector<CertificateStatus> ConfigManager::getCertificatesStatus(){
   }
   return certificates;
 }
+
+// ---------------------------------------------------------------------------
+// Loxone iButton mapping — NVS namespace "lox_map"
+// keys: "count" (u8), "issuer_N" (str), "rom_N" (blob 8B), "label_N" (str)
+// ---------------------------------------------------------------------------
+static constexpr const char* NVS_LOX_NS = "lox_map";
+
+std::vector<espConfig::loxone_mapping_t> ConfigManager::getLoxoneMappings() const {
+    std::vector<espConfig::loxone_mapping_t> result;
+    nvs_handle_t h;
+    if (nvs_open(NVS_LOX_NS, NVS_READONLY, &h) != ESP_OK) return result;
+
+    uint8_t count = 0;
+    nvs_get_u8(h, "count", &count);
+
+    for (uint8_t i = 0; i < count && i < CONFIG_LOXONE_MAX_MAPPINGS; i++) {
+        espConfig::loxone_mapping_t m;
+        char key[16];
+        size_t len;
+
+        snprintf(key, sizeof(key), "issuer_%d", i);
+        len = 0;
+        if (nvs_get_str(h, key, nullptr, &len) == ESP_OK && len > 0) {
+            std::string buf(len, '\0');
+            nvs_get_str(h, key, buf.data(), &len);
+            m.issuerId = buf.c_str();  // strip null terminator
+        }
+
+        snprintf(key, sizeof(key), "rom_%d", i);
+        len = m.romCode.size();
+        nvs_get_blob(h, key, m.romCode.data(), &len);
+
+        snprintf(key, sizeof(key), "label_%d", i);
+        len = 0;
+        if (nvs_get_str(h, key, nullptr, &len) == ESP_OK && len > 0) {
+            std::string buf(len, '\0');
+            nvs_get_str(h, key, buf.data(), &len);
+            m.label = buf.c_str();
+        }
+
+        if (!m.issuerId.empty()) result.push_back(std::move(m));
+    }
+
+    nvs_close(h);
+    return result;
+}
+
+bool ConfigManager::saveLoxoneMappings(const std::vector<espConfig::loxone_mapping_t>& mappings) {
+    nvs_handle_t h;
+    if (nvs_open(NVS_LOX_NS, NVS_READWRITE, &h) != ESP_OK) return false;
+
+    nvs_erase_all(h);
+
+    uint8_t count = static_cast<uint8_t>(std::min(mappings.size(), (size_t)CONFIG_LOXONE_MAX_MAPPINGS));
+    nvs_set_u8(h, "count", count);
+
+    for (uint8_t i = 0; i < count; i++) {
+        const auto& m = mappings[i];
+        char key[16];
+
+        snprintf(key, sizeof(key), "issuer_%d", i);
+        nvs_set_str(h, key, m.issuerId.c_str());
+
+        snprintf(key, sizeof(key), "rom_%d", i);
+        nvs_set_blob(h, key, m.romCode.data(), m.romCode.size());
+
+        snprintf(key, sizeof(key), "label_%d", i);
+        nvs_set_str(h, key, m.label.c_str());
+    }
+
+    esp_err_t err = nvs_commit(h);
+    nvs_close(h);
+    return err == ESP_OK;
+}

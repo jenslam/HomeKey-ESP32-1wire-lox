@@ -15,6 +15,7 @@
 #include "HardwareManager.hpp"
 #include "MqttManager.hpp"
 #include "WebServerManager.hpp"
+#include "LoxoneOneWireManager.hpp"
 #include <functional>
 #include <sodium/crypto_sign.h>
 #include <sodium/crypto_box.h>
@@ -32,6 +33,7 @@ std::unique_ptr<MqttManager> mqttManager;
 std::unique_ptr<WebServerManager> webServerManager;
 std::unique_ptr<HomeKitLock> homekitLock;
 std::unique_ptr<NfcManager> nfcManager;
+std::unique_ptr<LoxoneOneWireManager> loxoneManager;
 
 static dns_server_handle_t dns_server = NULL;
 
@@ -75,7 +77,12 @@ std::function<void(int)> lambda = [](int status) {
     mqttManager->end();
     webServerManager->end();
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP("HomeKey-ESP32", "homekey123", 11, false, 2, false, WIFI_AUTH_WPA2_WPA3_PSK, WIFI_CIPHER_TYPE_AES_CMAC128); 
+    // SSID includes last 3 MAC bytes to avoid collisions; password set via menuconfig
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    char apSsid[24];
+    snprintf(apSsid, sizeof(apSsid), "HK-Setup-%02X%02X%02X", mac[3], mac[4], mac[5]);
+    WiFi.softAP(apSsid, CONFIG_HOMEKEY_AP_PASSWORD, 11, false, 2, false, WIFI_AUTH_WPA2_WPA3_PSK, WIFI_CIPHER_TYPE_AES_CMAC128);
     start_captive_portal();
     webServerManager->begin();
     while(true){
@@ -114,6 +121,15 @@ void setup() {
   Sinker::instance().add_sinker(std::make_shared<loggable::WebSocketLogSinker>(webServerManager.get()));
   hardwareManager = std::make_unique<HardwareManager>(configManager->getConfig<espConfig::actions_config_t>());
   lockManager = std::make_unique<LockManager>(configManager->getConfig<espConfig::misc_config_t>(), configManager->getConfig<espConfig::actions_config_t>());
+
+  // Loxone 1-Wire bridge
+  {
+    espConfig::loxone_config_t loxCfg;
+    loxCfg.mappings = configManager->getLoxoneMappings();
+    loxoneManager = std::make_unique<LoxoneOneWireManager>(loxCfg);
+    loxoneManager->begin();
+  }
+
   mqttManager = std::make_unique<MqttManager>(*configManager);
   homekitLock = std::make_unique<HomeKitLock>(lambda, *lockManager, *configManager, *readerDataManager);
   espConfig::misc_config_t miscConfig = configManager->getConfig<espConfig::misc_config_t>();
@@ -175,6 +191,8 @@ void setup() {
   }
   webServerManager->setNfcManager(nfcManager.get());
   webServerManager->setMqttManager(mqttManager.get());
+  // Loxone REST routes are registered in WebServerManager::setupRoutes()
+  // called during webServerManager->begin() below
   hardwareManager->begin();
   homekitLock->begin();
   lockManager->begin();

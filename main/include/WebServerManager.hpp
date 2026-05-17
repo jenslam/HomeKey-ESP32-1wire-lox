@@ -137,6 +137,11 @@ private:
   static esp_err_t handleSaveCaptivePortalConfig(httpd_req_t *req);
   static esp_err_t handleWifiScan(httpd_req_t *req);
 
+  // Loxone 1-Wire mapping routes (registered in setupRoutes)
+  static esp_err_t handleGetLoxoneMappings(httpd_req_t *req);
+  static esp_err_t handleSaveLoxoneMapping(httpd_req_t *req);
+  static esp_err_t handleDeleteLoxoneMapping(httpd_req_t *req);
+
   // ------------------------------------------------------------------------
   // Core Internal Methods
   // ------------------------------------------------------------------------

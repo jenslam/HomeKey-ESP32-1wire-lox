@@ -60,6 +60,11 @@ public:
     std::string loadCertificate(espConfig::CertType certType);
     
     std::vector<CertificateStatus> getCertificatesStatus();
+
+    // Loxone iButton mapping table (NVS namespace "lox_map")
+    std::vector<espConfig::loxone_mapping_t> getLoxoneMappings() const;
+    bool saveLoxoneMappings(const std::vector<espConfig::loxone_mapping_t>& mappings);
+
     const espConfig::mqtt_ssl_t& getMqttSslConfig() const {
       return m_mqttSslConfig;
     }
