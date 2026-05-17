@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 860 560" xmlns="http://www.w3.org/2000/svg" font-family="monospace" font-size="13">
+
+  <!-- Background -->
+  <rect width="860" height="560" fill="#1a1a2e"/>
+
+  <!-- Title -->
+  <text x="430" y="34" text-anchor="middle" fill="#e0e0e0" font-size="15" font-weight="bold">HomeKey-ESP32 → Loxone 1-Wire Bridge — Verdrahtung</text>
+
+  <!-- ===================== ESP32 NodeMCU Block ===================== -->
+  <rect x="30" y="60" width="220" height="420" rx="10" fill="#16213e" stroke="#4a9eff" stroke-width="2"/>
+  <text x="140" y="84" text-anchor="middle" fill="#4a9eff" font-size="14" font-weight="bold">ESP32 WROOM NodeMCU</text>
+
+  <!-- ESP32 Pin labels -->
+  <text x="46" y="115" fill="#ffd700" font-size="12">3V3</text>
+  <text x="46" y="143" fill="#ff6b6b" font-size="12">GND</text>
+  <text x="46" y="171" fill="#50fa7b" font-size="12">GPIO4  (1-Wire OD)</text>
+  <text x="46" y="199" fill="#c8a0ff" font-size="12">GPIO5  (PN532 SS)</text>
+  <text x="46" y="227" fill="#c8a0ff" font-size="12">GPIO18 (PN532 SCK)</text>
+  <text x="46" y="255" fill="#c8a0ff" font-size="12">GPIO19 (PN532 MISO)</text>
+  <text x="46" y="283" fill="#c8a0ff" font-size="12">GPIO23 (PN532 MOSI)</text>
+  <text x="46" y="355" fill="#ffd700" font-size="12">5V / VIN</text>
+  <text x="46" y="383" fill="#ff6b6b" font-size="12">GND</text>
+
+  <!-- Connector dots on right side of ESP32 -->
+  <circle cx="250" cy="111" r="5" fill="#ffd700"/>
+  <circle cx="250" cy="139" r="5" fill="#ff6b6b"/>
+  <circle cx="250" cy="167" r="5" fill="#50fa7b"/>
+  <circle cx="250" cy="195" r="5" fill="#c8a0ff"/>
+  <circle cx="250" cy="223" r="5" fill="#c8a0ff"/>
+  <circle cx="250" cy="251" r="5" fill="#c8a0ff"/>
+  <circle cx="250" cy="279" r="5" fill="#c8a0ff"/>
+  <circle cx="250" cy="351" r="5" fill="#ffd700"/>
+  <circle cx="250" cy="379" r="5" fill="#ff6b6b"/>
+
+  <!-- ===================== Pull-up resistor ===================== -->
+  <rect x="300" y="90" width="180" height="70" rx="8" fill="#2a2a4a" stroke="#ffd700" stroke-width="1.5"/>
+  <text x="390" y="113" text-anchor="middle" fill="#ffd700" font-size="12" font-weight="bold">Pull-up Widerstand</text>
+  <text x="390" y="133" text-anchor="middle" fill="#ffd700" font-size="12">4.7 kΩ</text>
+  <text x="390" y="151" text-anchor="middle" fill="#888" font-size="11">GPIO4 ── [4k7] ── 3V3</text>
+
+  <!-- Pull-up connection lines -->
+  <!-- GPIO4 to left side of pull-up -->
+  <line x1="250" y1="167" x2="300" y2="125" stroke="#50fa7b" stroke-width="2"/>
+  <!-- 3V3 to right side of pull-up -->
+  <line x1="250" y1="111" x2="300" y2="111" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="300" y1="111" x2="480" y2="111" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- ===================== Loxone 1-Wire Extension ===================== -->
+  <rect x="560" y="80" width="260" height="200" rx="10" fill="#16213e" stroke="#50fa7b" stroke-width="2"/>
+  <text x="690" y="105" text-anchor="middle" fill="#50fa7b" font-size="14" font-weight="bold">Loxone 1-Wire Extension</text>
+
+  <text x="580" y="140" fill="#888" font-size="11">Bus-Power (intern)</text>
+  <text x="580" y="168" fill="#50fa7b" font-size="12">DATA (1-Wire)</text>
+  <text x="580" y="196" fill="#ff6b6b" font-size="12">GND</text>
+  <text x="580" y="240" fill="#888" font-size="11">Loxone Extension liefert</text>
+  <text x="580" y="256" fill="#888" font-size="11">Bus-Spannung (3.3V–5V)</text>
+
+  <!-- Connector dots on left side of Loxone -->
+  <circle cx="560" cy="164" r="5" fill="#50fa7b"/>
+  <circle cx="560" cy="192" r="5" fill="#ff6b6b"/>
+
+  <!-- 1-Wire connection: pull-up node → Loxone DATA -->
+  <path d="M 480 125 L 530 125 L 530 164 L 560 164"
+        stroke="#50fa7b" stroke-width="2.5" fill="none" stroke-dasharray="6,3"/>
+  <text x="510" y="118" fill="#50fa7b" font-size="10">1-Wire Bus</text>
+
+  <!-- GND connection: ESP32 GND → Loxone GND -->
+  <path d="M 250 379 L 530 379 L 530 192 L 560 192"
+        stroke="#ff6b6b" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  <text x="380" y="395" text-anchor="middle" fill="#ff6b6b" font-size="10">gemeinsame Masse</text>
+
+  <!-- ===================== PN532 Block ===================== -->
+  <rect x="30" y="510" width="350" height="38" rx="6" fill="#16213e" stroke="#c8a0ff" stroke-width="1.5"/>
+  <text x="205" y="528" text-anchor="middle" fill="#c8a0ff" font-size="12" font-weight="bold">PN532 NFC Reader</text>
+  <text x="205" y="542" text-anchor="middle" fill="#888" font-size="10">SCK→GPIO18 | MISO→GPIO19 | MOSI→GPIO23 | SS→GPIO5 | VCC→5V | GND→GND</text>
+
+  <!-- PN532 connection line -->
+  <line x1="205" y1="510" x2="140" y2="283" stroke="#c8a0ff" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- ===================== Power Supply ===================== -->
+  <rect x="560" y="310" width="260" height="90" rx="8" fill="#2a2a4a" stroke="#ffd700" stroke-width="1.5"/>
+  <text x="690" y="333" text-anchor="middle" fill="#ffd700" font-size="12" font-weight="bold">Stromversorgung</text>
+  <text x="690" y="353" text-anchor="middle" fill="#e0e0e0" font-size="11">5V dediziert am Verbauort</text>
+  <text x="690" y="371" text-anchor="middle" fill="#e0e0e0" font-size="11">→ NodeMCU VIN oder USB-Buchse</text>
+  <text x="690" y="389" text-anchor="middle" fill="#888" font-size="10">PN532: über 5V NodeMCU versorgt</text>
+
+  <!-- Power line to ESP32 -->
+  <line x1="560" y1="351" x2="250" y2="351" stroke="#ffd700" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+  <!-- ===================== Notes ===================== -->
+  <rect x="30" y="435" width="500" height="68" rx="6" fill="#12122a" stroke="#444" stroke-width="1"/>
+  <text x="40" y="453" fill="#e0e0e0" font-size="11" font-weight="bold">Wichtige Hinweise:</text>
+  <text x="40" y="470" fill="#aaa" font-size="11">• GPIO4 muss open-drain konfiguriert sein (passiert automatisch im Code)</text>
+  <text x="40" y="487" fill="#aaa" font-size="11">• Externer 4.7kΩ Pull-up von GPIO4 nach 3.3V zwingend erforderlich</text>
+  <text x="40" y="504" fill="#aaa" font-size="11">• GPIO34–39 NICHT verwenden (nur Eingang, kein Open-Drain möglich)</text>
+
+</svg>
