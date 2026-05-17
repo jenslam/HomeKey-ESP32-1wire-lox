@@ -12,16 +12,12 @@ menu "Loxone 1-Wire Bridge"
     config LOXONE_ACTIVE_DURATION_MS
         int "1-Wire active window after HomeKey tap (milliseconds)"
         default 3000
-        range 1000 10000
+        range 1000 65000
         help
             How long the virtual iButton is visible on the 1-Wire bus
             after a successful HomeKey authentication. Loxone polls ~1s,
-            so 3000ms gives 2-3 poll cycles.
-
-    config LOXONE_MAX_MAPPINGS
-        int "Maximum number of issuerId to ROM mappings"
-        default 16
-        range 1 32
+            so 3000ms gives 2-3 poll cycles. Configurable at runtime via
+            the web UI (stored in NVS, overrides this default).
 
     config HOMEKEY_AP_PASSWORD
         string "WiFi AP setup password (min 8 chars, WPA2/WPA3)"

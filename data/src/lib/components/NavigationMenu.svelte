@@ -128,6 +128,14 @@
 			</a>
 		</li>
 		<li class="my-1" role="menuitem">
+			<a href={p('/loxone')} class="text-lg flex items-center" {@attach isActiveLink({ className: 'bg-neutral' })}>
+				<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+				</svg>
+				Loxone
+			</a>
+		</li>
+		<li class="my-1" role="menuitem">
 			<a href={p('/misc')} class="text-lg flex items-center" {@attach isActiveLink({ className: 'bg-neutral' })}>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

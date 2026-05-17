@@ -112,6 +112,11 @@ ConfigManager::ConfigManager() : m_isInitialized(false) {
       {"logLevel", &m_miscConfig.logLevel}
     }
     },
+    {"loxone", {
+      {"enabled",          &m_loxoneConfig.enabled},
+      {"gpioPin",          &m_loxoneConfig.gpioPin},
+      {"activeDurationMs", &m_loxoneConfig.activeDurationMs},
+    }},
     {
       "actions", {
         {"nfcNeopixelPin", &m_actionsConfig.nfcNeopixelPin},
@@ -196,6 +201,7 @@ bool ConfigManager::begin() {
   loadConfigFromNvs("MQTTSSLDATA");
   loadConfigFromNvs("MISCDATA");
   loadConfigFromNvs("HTTPSDATA");
+  loadConfigFromNvs("LOXDATA");
 
   ESP_LOGI(TAG, "Initialization complete.");
   return true;
@@ -225,7 +231,9 @@ const ConfigType& ConfigManager::getConfig() const {
     return m_miscConfig;
   } else if constexpr (std::is_same_v<NonConstConfigType, espConfig::actions_config_t>) {
     return m_actionsConfig;
-  }else {
+  } else if constexpr (std::is_same_v<NonConstConfigType, espConfig::loxone_config_t>) {
+    return m_loxoneConfig;
+  } else {
     static_assert(std::is_void_v<ConfigType> && false, "Unsupported ConfigType for getConfig");
   }
 }
@@ -235,6 +243,8 @@ template const espConfig::misc_config_t& ConfigManager::getConfig<espConfig::mis
 template const espConfig::misc_config_t& ConfigManager::getConfig<espConfig::misc_config_t const>() const;
 template const espConfig::actions_config_t& ConfigManager::getConfig<espConfig::actions_config_t>() const;
 template const espConfig::actions_config_t& ConfigManager::getConfig<espConfig::actions_config_t const>() const;
+template const espConfig::loxone_config_t& ConfigManager::getConfig<espConfig::loxone_config_t>() const;
+template const espConfig::loxone_config_t& ConfigManager::getConfig<espConfig::loxone_config_t const>() const;
 
 template <typename ConfigType>
 /**
@@ -320,6 +330,8 @@ bool ConfigManager::saveConfig() {
     key = "MISCDATA";
   } else if constexpr(std::is_same_v<ConfigType, espConfig::https_certs_t>){
     key = "HTTPSDATA";
+  } else if constexpr(std::is_same_v<ConfigType, espConfig::loxone_config_t>){
+    key = "LOXDATA";
   } else {
     static_assert(std::is_void_v<ConfigType> && false, "Unsupported ConfigType for saveConfig");
   }
@@ -334,6 +346,7 @@ bool ConfigManager::saveConfig() {
 template bool ConfigManager::saveConfig<espConfig::mqttConfig_t>();
 template bool ConfigManager::saveConfig<espConfig::misc_config_t>();
 template bool ConfigManager::saveConfig<espConfig::actions_config_t>();
+template bool ConfigManager::saveConfig<espConfig::loxone_config_t>();
 
 /**
  * @brief Loads and applies a configuration blob from NVS into the in-memory config.
@@ -408,6 +421,8 @@ void ConfigManager::loadConfigFromNvs(const char *key) {
       deserialize(obj, "actions");
     } else if(!strcmp(key, "HTTPSDATA")){
       deserialize(obj, "https");
+    } else if(!strcmp(key, "LOXDATA")){
+      deserialize(obj, "loxone");
     } else {ESP_LOGE(TAG, "Key '%s' not valid", key);return;}
   } else {
     ESP_LOGE(TAG, "Failed to parse msgpack for key '%s'. Using defaults.", key);
@@ -438,6 +453,8 @@ bool ConfigManager::saveConfigToNvs(const char *key) {
     buf = serialize<espConfig::mqttConfig_t>();
   } else if (!strcmp(key, "HTTPSDATA")){
     buf = serialize<espConfig::https_certs_t>();
+  } else if (!strcmp(key, "LOXDATA")){
+    buf = serialize<espConfig::loxone_config_t>();
   }
 
   esp_err_t set_err = nvs_set_blob(m_nvsHandle, key, buf.data(), buf.size());
@@ -617,6 +634,8 @@ std::vector<uint8_t> ConfigManager::serialize() {
     configMap = m_configMap["mqtt"];
   } else if constexpr (std::is_same_v<espConfig::https_certs_t, ConfigType>){
     configMap = m_configMap["https"];
+  } else if constexpr (std::is_same_v<espConfig::loxone_config_t, ConfigType>){
+    configMap = m_configMap["loxone"];
   }
   msgpack_pack_map(&pk, configMap.size()); // Pack the map size
 
@@ -709,6 +728,8 @@ std::string ConfigManager::updateFromJson(const std::string& json_string) {
     configMapPtr = &m_configMap["actions"];
   } else if constexpr (std::is_same_v<ConfigType, espConfig::mqttConfig_t>) {
     configMapPtr = &m_configMap["mqtt"];
+  } else if constexpr (std::is_same_v<ConfigType, espConfig::loxone_config_t>) {
+    configMapPtr = &m_configMap["loxone"];
   } else {
     ESP_LOGE(TAG, "Invalid configuration type specified.");
     return "";
@@ -817,6 +838,7 @@ std::string ConfigManager::updateFromJson(const std::string& json_string) {
 template std::string ConfigManager::updateFromJson<espConfig::misc_config_t>(const std::string& json_string);
 template std::string ConfigManager::updateFromJson<espConfig::actions_config_t>(const std::string& json_string);
 template std::string ConfigManager::updateFromJson<espConfig::mqttConfig_t>(const std::string& json_string);
+template std::string ConfigManager::updateFromJson<espConfig::loxone_config_t>(const std::string& json_string);
 
 template <typename ConfigType>
 /**
@@ -854,6 +876,8 @@ std::string ConfigManager::serializeToJson() {
     configMap = m_configMap["actions"];
   } else if constexpr (std::is_same_v<espConfig::mqttConfig_t, ConfigType>){
     configMap = m_configMap["mqtt"];
+  } else if constexpr (std::is_same_v<espConfig::loxone_config_t, ConfigType>){
+    configMap = m_configMap["loxone"];
   }
     for (const auto &pair : configMap) {
         const std::string& key = pair.first;
@@ -917,6 +941,7 @@ std::string ConfigManager::serializeToJson() {
 template std::string ConfigManager::serializeToJson<espConfig::misc_config_t>();
 template std::string ConfigManager::serializeToJson<espConfig::actions_config_t>();
 template std::string ConfigManager::serializeToJson<espConfig::mqttConfig_t>();
+template std::string ConfigManager::serializeToJson<espConfig::loxone_config_t>();
 
 template <typename ConfigType>
 /**
@@ -1542,76 +1567,3 @@ std::vector<CertificateStatus> ConfigManager::getCertificatesStatus(){
   return certificates;
 }
 
-// ---------------------------------------------------------------------------
-// Loxone iButton mapping — NVS namespace "lox_map"
-// keys: "count" (u8), "issuer_N" (str), "rom_N" (blob 8B), "label_N" (str)
-// ---------------------------------------------------------------------------
-static constexpr const char* NVS_LOX_NS = "lox_map";
-
-std::vector<espConfig::loxone_mapping_t> ConfigManager::getLoxoneMappings() const {
-    std::vector<espConfig::loxone_mapping_t> result;
-    nvs_handle_t h;
-    if (nvs_open(NVS_LOX_NS, NVS_READONLY, &h) != ESP_OK) return result;
-
-    uint8_t count = 0;
-    nvs_get_u8(h, "count", &count);
-
-    for (uint8_t i = 0; i < count && i < CONFIG_LOXONE_MAX_MAPPINGS; i++) {
-        espConfig::loxone_mapping_t m;
-        char key[16];
-        size_t len;
-
-        snprintf(key, sizeof(key), "issuer_%d", i);
-        len = 0;
-        if (nvs_get_str(h, key, nullptr, &len) == ESP_OK && len > 0) {
-            std::string buf(len, '\0');
-            nvs_get_str(h, key, buf.data(), &len);
-            m.issuerId = buf.c_str();  // strip null terminator
-        }
-
-        snprintf(key, sizeof(key), "rom_%d", i);
-        len = m.romCode.size();
-        nvs_get_blob(h, key, m.romCode.data(), &len);
-
-        snprintf(key, sizeof(key), "label_%d", i);
-        len = 0;
-        if (nvs_get_str(h, key, nullptr, &len) == ESP_OK && len > 0) {
-            std::string buf(len, '\0');
-            nvs_get_str(h, key, buf.data(), &len);
-            m.label = buf.c_str();
-        }
-
-        if (!m.issuerId.empty()) result.push_back(std::move(m));
-    }
-
-    nvs_close(h);
-    return result;
-}
-
-bool ConfigManager::saveLoxoneMappings(const std::vector<espConfig::loxone_mapping_t>& mappings) {
-    nvs_handle_t h;
-    if (nvs_open(NVS_LOX_NS, NVS_READWRITE, &h) != ESP_OK) return false;
-
-    nvs_erase_all(h);
-
-    uint8_t count = static_cast<uint8_t>(std::min(mappings.size(), (size_t)CONFIG_LOXONE_MAX_MAPPINGS));
-    nvs_set_u8(h, "count", count);
-
-    for (uint8_t i = 0; i < count; i++) {
-        const auto& m = mappings[i];
-        char key[16];
-
-        snprintf(key, sizeof(key), "issuer_%d", i);
-        nvs_set_str(h, key, m.issuerId.c_str());
-
-        snprintf(key, sizeof(key), "rom_%d", i);
-        nvs_set_blob(h, key, m.romCode.data(), m.romCode.size());
-
-        snprintf(key, sizeof(key), "label_%d", i);
-        nvs_set_str(h, key, m.label.c_str());
-    }
-
-    esp_err_t err = nvs_commit(h);
-    nvs_close(h);
-    return err == ESP_OK;
-}

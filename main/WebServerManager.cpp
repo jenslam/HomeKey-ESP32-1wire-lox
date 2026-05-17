@@ -15,7 +15,6 @@
 #include "ReaderDataManager.hpp"
 #include "cJSON.h"
 #include "config.hpp"
-#include "dallas_crc.hpp"
 #include "esp_chip_info.h"
 #include "esp_err.h"
 #include "esp_heap_caps.h"
@@ -317,9 +316,6 @@ void WebServerManager::setupRoutes() {
       {"/certificates", HTTP_DELETE, handleCertificateDelete, this},
 
       // Loxone 1-Wire mapping endpoints
-      {"/loxone/mappings", HTTP_GET,    handleGetLoxoneMappings,  this},
-      {"/loxone/mappings", HTTP_POST,   handleSaveLoxoneMapping,  this},
-      {"/loxone/mappings", HTTP_DELETE, handleDeleteLoxoneMapping, this},
 
       // Catch-all (must be last)
       {"/*", HTTP_GET, handleRootOrHash, this}};
@@ -579,6 +575,9 @@ esp_err_t WebServerManager::handleGetConfig(httpd_req_t *req) {
   } else if (type == "actions"){
     responseJson =
         instance->m_configManager.serializeToJson<espConfig::actions_config_t>();
+  } else if (type == "loxone") {
+    responseJson =
+        instance->m_configManager.serializeToJson<espConfig::loxone_config_t>();
   } else if (type == "hkinfo") {
     const auto readerData = instance->m_readerDataManager.getReaderDataCopy();
     cJSON *hkInfo = cJSON_CreateObject();
@@ -830,6 +829,10 @@ esp_err_t WebServerManager::handleSaveConfig(httpd_req_t *req) {
     std::string s =
         instance->m_configManager.serializeToJson<espConfig::actions_config_t>();
     configSchema = cJSON_Parse(s.c_str());
+  } else if (type == "loxone") {
+    std::string s =
+        instance->m_configManager.serializeToJson<espConfig::loxone_config_t>();
+    configSchema = cJSON_Parse(s.c_str());
   } else {
     cJSON_Delete(obj);
     httpd_resp_set_status(req, "400 Bad Request");
@@ -942,6 +945,13 @@ esp_err_t WebServerManager::handleSaveConfig(httpd_req_t *req) {
     if (!result.empty()) {
       success =
           instance->m_configManager.saveConfig<espConfig::actions_config_t>();
+    }
+  } else if (type == "loxone") {
+    result = instance->m_configManager.updateFromJson<espConfig::loxone_config_t>(data_str);
+    if (!result.empty()) {
+      success = instance->m_configManager.saveConfig<espConfig::loxone_config_t>();
+      rebootNeeded = true;
+      rebootMsg = "Loxone config saved, reboot needed! Rebooting...";
     }
   }
 
@@ -2537,146 +2547,4 @@ esp_err_t WebServerManager::handleCertificateDelete(httpd_req_t *req) {
   return ESP_FAIL;
 }
 
-// ============================================================================
-// Loxone 1-Wire Mapping Handlers
-// ============================================================================
-
-esp_err_t WebServerManager::handleGetLoxoneMappings(httpd_req_t *req) {
-    WebServerManager *instance = getInstance(req);
-    if (!instance->basicAuth(req)) return sendAuthFailure(req);
-
-    auto mappings = instance->m_configManager.getLoxoneMappings();
-
-    cJSON *arr = cJSON_CreateArray();
-    for (const auto& m : mappings) {
-        cJSON *obj = cJSON_CreateObject();
-        cJSON_AddStringToObject(obj, "issuerId", m.issuerId.c_str());
-        cJSON_AddStringToObject(obj, "label",    m.label.c_str());
-        char romHex[17] = {};
-        for (int i = 0; i < 8; i++) snprintf(romHex + i * 2, 3, "%02X", m.romCode[i]);
-        cJSON_AddStringToObject(obj, "rom",      romHex);
-        cJSON_AddBoolToObject(obj,   "romValid",  dallas_rom_valid(m.romCode));
-        cJSON_AddItemToArray(arr, obj);
-    }
-
-    char *body = cJSON_PrintUnformatted(arr);
-    cJSON_Delete(arr);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, body);
-    free(body);
-    return ESP_OK;
-}
-
-esp_err_t WebServerManager::handleSaveLoxoneMapping(httpd_req_t *req) {
-    WebServerManager *instance = getInstance(req);
-    if (!instance->basicAuth(req)) return sendAuthFailure(req);
-
-    int total = req->content_len;
-    if (total <= 0 || total > 512) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Bad content length");
-        return ESP_FAIL;
-    }
-
-    std::string buf(total, '\0');
-    int received = httpd_req_recv(req, buf.data(), total);
-    if (received != total) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Read error");
-        return ESP_FAIL;
-    }
-
-    cJSON *json = cJSON_Parse(buf.c_str());
-    if (!json) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
-    }
-
-    const char* issuerId = cJSON_GetStringValue(cJSON_GetObjectItem(json, "issuerId"));
-    const char* romStr   = cJSON_GetStringValue(cJSON_GetObjectItem(json, "rom"));
-    const char* label    = cJSON_GetStringValue(cJSON_GetObjectItem(json, "label"));
-
-    if (!issuerId || !romStr || strlen(romStr) < 14) {
-        cJSON_Delete(json);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "issuerId and rom (min 14 hex chars) required");
-        return ESP_FAIL;
-    }
-
-    // Parse ROM hex — accept 7 bytes (CRC auto) or 8 bytes (CRC provided)
-    espConfig::ibutton_rom_t rom{};
-    int chars = strlen(romStr);
-    int bytes = std::min(chars / 2, 8);
-    for (int i = 0; i < bytes; i++) {
-        char hex[3] = {romStr[i * 2], romStr[i * 2 + 1], 0};
-        rom[i] = (uint8_t)strtol(hex, nullptr, 16);
-    }
-    if (bytes < 8 || rom[7] == 0) dallas_rom_set_crc(rom);
-
-    if (!dallas_rom_valid(rom)) {
-        cJSON_Delete(json);
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ROM CRC invalid");
-        return ESP_FAIL;
-    }
-
-    auto mappings = instance->m_configManager.getLoxoneMappings();
-    bool found = false;
-    for (auto& m : mappings) {
-        if (m.issuerId == issuerId) {
-            m.romCode = rom;
-            m.label   = label ? label : "";
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        espConfig::loxone_mapping_t m;
-        m.issuerId = issuerId;
-        m.romCode  = rom;
-        m.label    = label ? label : "";
-        mappings.push_back(std::move(m));
-    }
-
-    cJSON_Delete(json);
-
-    if (instance->m_configManager.saveLoxoneMappings(mappings)) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, "{\"ok\":true}");
-    } else {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS write failed");
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
-
-esp_err_t WebServerManager::handleDeleteLoxoneMapping(httpd_req_t *req) {
-    WebServerManager *instance = getInstance(req);
-    if (!instance->basicAuth(req)) return sendAuthFailure(req);
-
-    // Parse ?issuerId=xxxx query param
-    char issuerBuf[64] = {};
-    if (httpd_req_get_url_query_str(req, nullptr, 0) == ESP_OK) {
-        size_t qlen = httpd_req_get_url_query_len(req) + 1;
-        std::string query(qlen, '\0');
-        httpd_req_get_url_query_str(req, query.data(), qlen);
-        char val[64] = {};
-        if (httpd_query_key_value(query.c_str(), "issuerId", val, sizeof(val)) != ESP_OK) {
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "issuerId query param required");
-            return ESP_FAIL;
-        }
-        strncpy(issuerBuf, val, sizeof(issuerBuf) - 1);
-    } else {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "issuerId query param required");
-        return ESP_FAIL;
-    }
-
-    auto mappings = instance->m_configManager.getLoxoneMappings();
-    mappings.erase(std::remove_if(mappings.begin(), mappings.end(),
-        [&issuerBuf](const auto& m){ return m.issuerId == issuerBuf; }), mappings.end());
-
-    if (instance->m_configManager.saveLoxoneMappings(mappings)) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, "{\"ok\":true}");
-    } else {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS write failed");
-        return ESP_FAIL;
-    }
-    return ESP_OK;
-}
+// (Loxone mapping handlers removed — ROM is derived from issuerId directly)

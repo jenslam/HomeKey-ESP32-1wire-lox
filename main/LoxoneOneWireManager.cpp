@@ -70,14 +70,20 @@ void LoxoneOneWireManager::begin() {
             }
             ESP_LOGI(TAG, "HomeKey tap — issuerId: %s", issuerHex.c_str());
 
-            for (const auto& mapping : m_config.mappings) {
-                if (mapping.issuerId == issuerHex) {
-                    ESP_LOGI(TAG, "Mapped to ROM for '%s' — activating 1-Wire", mapping.label.c_str());
-                    activateRom(mapping.romCode);
-                    return;
-                }
+            espConfig::ibutton_rom_t rom{};
+            rom[0] = 0x01;
+            for (size_t i = 0; i < 6 && i < tap.issuerId.size(); i++) {
+                rom[i + 1] = tap.issuerId[i];
             }
-            ESP_LOGW(TAG, "No 1-Wire mapping for issuerId %s — add via POST /loxone/mappings", issuerHex.c_str());
+            dallas_rom_set_crc(rom);
+
+            ESP_LOGI(TAG, "issuerId: %s → ROM: %02X%02X%02X%02X%02X%02X%02X%02X",
+                issuerHex.c_str(),
+                rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
+            ESP_LOGI(TAG, "Add to Loxone (if new): %02X%02X%02X%02X%02X%02X%02X%02X",
+                rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
+
+            activateRom(rom);
         });
 
     ESP_LOGI(TAG, "1-Wire slave started on GPIO%d", m_gpio);

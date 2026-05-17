@@ -123,12 +123,9 @@ void setup() {
   lockManager = std::make_unique<LockManager>(configManager->getConfig<espConfig::misc_config_t>(), configManager->getConfig<espConfig::actions_config_t>());
 
   // Loxone 1-Wire bridge
-  {
-    espConfig::loxone_config_t loxCfg;
-    loxCfg.mappings = configManager->getLoxoneMappings();
-    loxoneManager = std::make_unique<LoxoneOneWireManager>(loxCfg);
-    loxoneManager->begin();
-  }
+  loxoneManager = std::make_unique<LoxoneOneWireManager>(
+      configManager->getConfig<espConfig::loxone_config_t>());
+  loxoneManager->begin();
 
   mqttManager = std::make_unique<MqttManager>(*configManager);
   homekitLock = std::make_unique<HomeKitLock>(lambda, *lockManager, *configManager, *readerDataManager);
