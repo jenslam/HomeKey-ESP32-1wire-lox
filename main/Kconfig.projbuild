@@ -2,7 +2,7 @@ menu "Loxone 1-Wire Bridge"
 
     config LOXONE_ONEWIRE_GPIO
         int "1-Wire GPIO pin (must support open-drain, not input-only)"
-        default 4
+        default 27
         range 0 33
         help
             GPIO pin connected to the Loxone 1-Wire Extension DATA line.
