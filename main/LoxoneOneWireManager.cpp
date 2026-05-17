@@ -49,7 +49,7 @@ void LoxoneOneWireManager::begin() {
     configASSERT(ok == pdPASS);
 
     // Subscribe to NFC_TAP_EVENT on the EventBus
-    m_nfcEventSub = subscribe(NFC_EVENT, NFC_TAP_EVENT,
+    m_nfcEventSub = AppEventLoop::subscribe(NFC_EVENT, NFC_TAP_EVENT,
         [this](const uint8_t* data, size_t size) {
             if (!data || size == 0) return;
             std::span<const uint8_t> payload(data, size);

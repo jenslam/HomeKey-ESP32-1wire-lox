@@ -37,8 +37,8 @@ private:
     static constexpr uint8_t CMD_SEARCH_ROM = 0xF0;
     static constexpr uint8_t CMD_SKIP_ROM   = 0xCC;
 
-    const espConfig::loxone_config_t& m_config;
-    SubscriptionHandle                 m_nfcEventSub;
+    const espConfig::loxone_config_t&        m_config;
+    AppEventLoop::SubscriptionHandle         m_nfcEventSub;
 
     gpio_num_t        m_gpio;
     SemaphoreHandle_t m_resetSem    = nullptr;
