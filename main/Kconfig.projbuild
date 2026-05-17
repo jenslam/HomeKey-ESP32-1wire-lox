@@ -1,3 +1,38 @@
+menu "Loxone 1-Wire Bridge"
+
+    config LOXONE_ONEWIRE_GPIO
+        int "1-Wire GPIO pin (must support open-drain, not input-only)"
+        default 4
+        range 0 33
+        help
+            GPIO pin connected to the Loxone 1-Wire Extension DATA line.
+            Use GPIO4 (recommended). DO NOT use GPIO34-39 (input-only).
+            Requires external 4.7kΩ pull-up resistor to 3.3V.
+
+    config LOXONE_ACTIVE_DURATION_MS
+        int "1-Wire active window after HomeKey tap (milliseconds)"
+        default 3000
+        range 1000 10000
+        help
+            How long the virtual iButton is visible on the 1-Wire bus
+            after a successful HomeKey authentication. Loxone polls ~1s,
+            so 3000ms gives 2-3 poll cycles.
+
+    config LOXONE_MAX_MAPPINGS
+        int "Maximum number of issuerId to ROM mappings"
+        default 16
+        range 1 32
+
+    config HOMEKEY_AP_PASSWORD
+        string "WiFi AP setup password (min 8 chars, WPA2/WPA3)"
+        default "changeme1"
+        help
+            Password for the temporary setup WiFi AP.
+            IMPORTANT: Change this before first flash.
+            AP is only active when the device has no WiFi credentials configured.
+
+endmenu
+
 menu "Arduino Console USB-JTAG"
   config ARDUINO_USE_USB_JTAG
     depends on !IDF_TARGET_ESP32

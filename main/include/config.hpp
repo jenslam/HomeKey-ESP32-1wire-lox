@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include <array>
+#include "loxone_config.hpp"
 #include "defaults.h"
 #include "esp_log_level.h"
 #include "fmt/format.h"
