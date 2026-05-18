@@ -332,6 +332,8 @@ export interface LoxoneConfig {
   gpioPin: number;
   /** Duration in ms the virtual iButton is visible after a HomeKey tap */
   activeDurationMs: number;
+  /** ROM source: 0 = issuerId (per Apple ID), 1 = endpointId (per device) */
+  romSource: number;
 }
 
 /**

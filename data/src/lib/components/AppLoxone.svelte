@@ -6,7 +6,7 @@
   let { loxone, error }: { loxone: LoxoneConfig | null; error: string | null } = $props();
 
   // svelte-ignore state_referenced_locally
-  let loxoneConfig = $state<LoxoneConfig>($state.snapshot(loxone) ?? { enabled: false, gpioPin: 4, activeDurationMs: 3000 });
+  let loxoneConfig = $state<LoxoneConfig>($state.snapshot(loxone) ?? { enabled: false, gpioPin: 4, activeDurationMs: 3000, romSource: 0 });
 
   const saveLoxoneConfig = async (e: Event) => {
     e.preventDefault();
@@ -103,6 +103,31 @@
             <span class="label-text-alt">Loxone polls ~every 1 s. 3000 ms (default) gives 2–3 read cycles.</span>
           </label>
         </div>
+
+        <div class="form-control">
+          <label class="label" for="romSource">
+            <span class="label-text font-medium">ROM Source</span>
+            <span class="label-text-alt text-base-content/60">Which ID to derive the iButton ROM from</span>
+          </label>
+          <select
+            id="romSource"
+            class="select select-bordered w-64"
+            disabled={!loxoneConfig.enabled}
+            bind:value={loxoneConfig.romSource}
+          >
+            <option value={0}>Apple ID (issuerId) — all devices</option>
+            <option value={1}>Device (endpointId) — this device only</option>
+          </select>
+          <label class="label">
+            <span class="label-text-alt">
+              {#if loxoneConfig.romSource === 0}
+                iPhone, Apple Watch and iPad of the same Apple ID share one ROM → one Loxone rule covers all.
+              {:else}
+                Each physical device gets its own ROM → assign separate Loxone permissions per device.
+              {/if}
+            </span>
+          </label>
+        </div>
       </div>
 
       <!-- How it works info box -->
@@ -113,15 +138,21 @@
         <div class="text-sm">
           <p class="font-medium mb-1">How iButton codes are generated</p>
           <p>
-            Each Apple account has a unique <strong>Issuer ID</strong>. After a successful HomeKey tap the ESP32 derives
-            a deterministic 8-byte DS1990A ROM from the first 6 bytes of that ID (family code <code>0x01</code> + 6 bytes + CRC8).
+            After a tap the ESP32 derives a deterministic 8-byte DS1990A ROM:
+            <code>0x01</code> + 6 bytes from the chosen source + CRC8.
+            The ROM is stable across reboots and reflashes.
           </p>
           <p class="mt-1">
-            To add a new user: tap their device once, then open the Loxone 1-Wire extension in Loxone Config and run
-            <em>"Scan for devices"</em>. The iButton ROM will appear automatically. No manual mapping needed.
+            <strong>Apple ID mode (default):</strong> uses the <em>issuerId</em> — identical for all devices on
+            one Apple account. iPhone, Watch and iPad share the same ROM → one Loxone rule.
           </p>
           <p class="mt-1">
-            The Issuer ID is the same across all devices on one Apple ID (iPhone, Apple Watch, iPad).
+            <strong>Device mode:</strong> uses the <em>endpointId</em> — unique per physical device.
+            Lets you grant/revoke access per device in Loxone independently.
+          </p>
+          <p class="mt-1">
+            To register a new user: tap their device, then run <em>"Scan for devices"</em> in the Loxone
+            1-Wire extension. The ROM appears automatically — no manual mapping needed.
           </p>
         </div>
       </div>

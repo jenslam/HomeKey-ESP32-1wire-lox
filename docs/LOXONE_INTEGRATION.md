@@ -7,11 +7,15 @@ Nach erfolgreicher Apple HomeKey Authentifizierung (iPhone, Apple Watch) emulier
 ESP32 einen Dallas DS1990A iButton auf dem Loxone 1-Wire Bus. Loxone übernimmt die
 Zugangssteuerung wie gewohnt — keine Änderung der Loxone-Konfiguration nötig.
 
+**ROM-Code-Ableitung:** Der virtuelle iButton-ROM wird deterministisch aus der HomeKey
+`issuerId` abgeleitet: `[0x01, issuerId[0..5], CRC8]`. Kein manuelles Mapping nötig.
+Gleiche Apple ID → gleicher ROM → Loxone-Konfiguration überlebt ESP32-Reflash.
+
 **Vorteile gegenüber MQTT:**
-- Kein stabiles WLAN-Signal am Verbauort erforderlich
-- Kein MQTT-Broker nötig
 - Kabelgebunden → keine Verbindungsabbrüche
+- Kein MQTT-Broker nötig
 - Gleiche Logik wie physische iButtons
+- HomeKey-Validierung vollständig lokal (kein Internet)
 
 ## Hardware
 
@@ -19,9 +23,10 @@ Zugangssteuerung wie gewohnt — keine Änderung der Loxone-Konfiguration nötig
 |------------|-------------|
 | ESP32 WROOM NodeMCU | Mikrocontroller |
 | PN532 NFC Reader | Liest Apple HomeKey via NFC |
-| 4.7 kΩ Widerstand | Pull-up für 1-Wire Bus (GPIO4 → 3.3V) |
+| 4.7 kΩ Widerstand | Pull-up für 1-Wire Bus (GPIO27 → 3.3V) |
+| 100 µF Elko | Zwischen 3.3V und GND, stabilisiert Spannungsregler |
 | Loxone 1-Wire Extension | Liest den emulierten iButton |
-| 5V Netzteil | Dedizierte Stromversorgung am Verbauort |
+| 5V Netzteil (≥1A) | Dedizierte Stromversorgung am Verbauort |
 
 ## Verdrahtung
 
@@ -29,11 +34,11 @@ Schaltplan: [`docs/wiring/homekey-loxone-wiring.svg`](wiring/homekey-loxone-wiri
 
 **1-Wire Verbindung:**
 ```
-ESP32 GPIO4 ──┬── 4.7kΩ ──► 3.3V (ESP32 Pin)
-              │
-         Loxone 1-Wire Extension DATA-Klemme
-              │
-         GND (gemeinsame Masse ESP32 + Loxone Ext.)
+ESP32 GPIO27 ──┬── 4.7 kΩ ──► 3.3V (ESP32 Pin)
+               │
+          Loxone 1-Wire Extension DATA-Klemme
+               │
+          GND (gemeinsame Masse ESP32 + Loxone Ext.)
 ```
 
 **PN532 SPI-Verbindung:**
@@ -46,155 +51,144 @@ PN532 VCC   → 5V
 PN532 GND   → GND
 ```
 
-> **Wichtig:** GPIO4 muss als Open-Drain konfiguriert sein (geschieht automatisch).
-> Der externe 4.7kΩ Pull-up-Widerstand ist zwingend erforderlich.
+**Stabilisierungskondensator:**
+```
+ESP32 3V3-Pin ──[+ 100µF -]── GND-Pin
+```
+(langer Pin des Elkos an 3V3, kurzer an GND)
+
+> **Wichtig:** GPIO27 muss als Open-Drain konfiguriert sein (geschieht automatisch).
+> Der externe 4.7 kΩ Pull-up-Widerstand ist zwingend erforderlich.
 > GPIO34–39 nicht verwenden (nur Eingang, kein Open-Drain möglich).
 
 ## Ersteinrichtung
 
-### 1. Firmware konfigurieren
+### 1. Firmware flashen
 
 ```bash
-cd /Users/jenslammert/claude/esp32_homekey
-idf.py menuconfig
-```
+export PATH="$HOME/.bun/bin:$PATH"
+. ~/esp/esp-idf/export.sh     # ESP-IDF v5.5.4
 
-Unter **"Loxone 1-Wire Bridge"**:
-- `LOXONE_ONEWIRE_GPIO`: 4 (Standard)
-- `LOXONE_ACTIVE_DURATION_MS`: 3000 (3 Sekunden)
-- `HOMEKEY_AP_PASSWORD`: Eigenes sicheres Passwort setzen (min. 8 Zeichen)
+# Build + Flash (USB-Kabel angeschlossen):
+idf.py -p /dev/tty.SLAB_USBtoUART flash
 
-### 2. Flashen
-
-```bash
+# Oder Convenience-Script:
 ./flash.sh
-# oder mit explizitem Port:
-./flash.sh /dev/tty.usbserial-XXXX
 ```
 
-Port-Suche falls nötig:
-```bash
-ls /dev/tty.*
-```
+> **NodeMCU + 5V PSU:** NodeMCU-Boards können beim Booten ohne USB-Verbindung
+> Probleme mit der WiFi-Initialisierung haben (bekanntes arduino-esp32 Problem,
+> behoben in Version ≥3.3.8). Dieses Fork verwendet 3.3.8.
+> Zusätzlich: 100 µF Elko zwischen 3.3V und GND des ESP32 verbessert die
+> Spannungsstabilität beim WiFi-Verbindungsaufbau.
 
-### 3. HomeKit einrichten
+### 2. HomeKit einrichten
 
 Beim ersten Start öffnet der ESP32 einen temporären WLAN-Hotspot:
 - **SSID:** `HK-Setup-XXYYZZ` (letzte 3 Bytes der BT-MAC-Adresse)
-- **Passwort:** wie in Kconfig gesetzt
+- **Passwort:** wie in `HOMEKEY_AP_PASSWORD` gesetzt (Standard: `changeme1` — **ändern!**)
 
 Im Browser `http://192.168.4.1` öffnen → HomeSpan Konfiguration:
-1. WLAN-Zugangsdaten eingeben (für Web-UI Zugang)
+1. WLAN-Zugangsdaten eingeben
 2. HomeKit-Code notieren und in Apple Home App einscannen
 
-Nach erfolgreicher WLAN-Verbindung: IP im Serial Monitor ablesen.
-Der AP-Modus öffnet sich **nach der Einrichtung nie wieder automatisch**.
+Nach erfolgreicher WLAN-Verbindung: IP über Router-DHCP-Liste oder Serial Monitor ermitteln.
 
-### 4. Apple Device issuerId ermitteln
+### 3. Loxone-Parameter konfigurieren (Web UI)
 
-Gerät (iPhone/Apple Watch) an den PN532 halten. Im Serial Monitor erscheint:
+Im Browser `http://ESP32_IP` öffnen → **Loxone** Seite:
+
+| Einstellung | Standard | Beschreibung |
+|-------------|----------|-------------|
+| Enable | ✓ | 1-Wire Emulation aktivieren |
+| GPIO Pin | 27 | GPIO für 1-Wire Bus |
+| Active Duration | 3000 ms | Wie lange iButton nach Tap sichtbar ist |
+
+Die Active Duration sollte mindestens 2× das Loxone-Poll-Intervall betragen (~1 Sekunde).
+3000 ms = 2–3 Loxone-Zyklen, empfohlener Standardwert.
+
+### 4. issuerId und ROM-Code ermitteln
+
+Apple Device an den PN532 halten. Im Serial Monitor oder Web UI Logs erscheint:
 ```
-I (XXXX) LoxoneOneWire: HomeKey tap — issuerId: a1b2c3d4
-W (XXXX) LoxoneOneWire: No 1-Wire mapping for issuerId a1b2c3d4 — add via POST /loxone/mappings
+I LoxoneOneWire: HomeKey tap — issuerId: f2963548...
+I LoxoneOneWire: issuerId: f2963548... → ROM: 01F29635484B2E48AA
+I LoxoneOneWire: Add to Loxone (if new): 01F29635484B2E48AA
 ```
 
 Die `issuerId` ist für **alle Geräte derselben Apple-ID** identisch:
-iPhone + Apple Watch + iPad einer Person = gleiche `issuerId`.
+iPhone + Apple Watch + iPad einer Person = gleiche `issuerId` = gleicher ROM.
 
-### 5. iButton ROM-Code bestimmen
+### 5. Loxone konfigurieren
 
-**Option A: Bestehenden Loxone iButton wiederverwenden**
+1. **1-Wire Suche starten:** Loxone Config → 1-Wire Extension → "1-Wire Suche"
+2. **Tap ausführen:** Apple Device an PN532 halten während Suche läuft
+3. **Gerät erscheint:** ROM `01F296...` taucht in den Suchergebnissen auf
+4. **Zugangs-Baustein zuordnen:** 1-Wire Gerät dem Zugangs-Baustein zuweisen
+5. **Fertig:** Nächster Tap öffnet die Tür
 
-Falls du bereits physische iButtons in Loxone konfiguriert hast:
-- ROM-Code aus Loxone auslesen (1-Wire Extension → iButton Konfiguration)
-- Format: 8 Bytes hex, z.B. `01A2B3C4D5E6F7XX` (XX = CRC)
-- Oder nur 7 Bytes eingeben — CRC wird automatisch berechnet
-
-**Option B: Neuen virtuellen iButton anlegen**
-
-1. Wähle 6 beliebige Bytes für die Seriennummer, z.B. `A1B2C3D4E5F6`
-2. Mapping speichern (CRC wird auto-berechnet)
-3. In Loxone: 1-Wire Extension → "1-Wire Suche" starten
-4. Apple Device an Leser halten → Loxone erkennt den virtuellen iButton
-5. ID in Loxone-Konfiguration übernehmen und Berechtigungen vergeben
-
-### 6. Mapping konfigurieren
-
-Über die Web-UI (HTTP, im lokalen Netzwerk):
-
-```bash
-# Mapping hinzufügen / aktualisieren
-curl -X POST http://ESP32_IP/loxone/mappings \
-  -H "Content-Type: application/json" \
-  -d '{"issuerId":"a1b2c3d4","rom":"01A2B3C4D5E6F7","label":"Jens"}'
-
-# Alle Mappings anzeigen
-curl http://ESP32_IP/loxone/mappings
-
-# Mapping löschen
-curl -X DELETE "http://ESP32_IP/loxone/mappings?issuerId=a1b2c3d4"
-```
-
-**ROM-Format:**
-- 14 hex Zeichen (7 Bytes) → CRC wird automatisch berechnet
-- 16 hex Zeichen (8 Bytes inkl. CRC) → direkt übernommen
-- Erstes Byte muss `01` sein (DS1990A Familie)
+> Der iButton-Emulator erzeugt eine saubere `0 → 1 → 0` Zustandsänderung:
+> der virtuelle iButton erscheint nach dem Tap für `Active Duration` Millisekunden
+> auf dem Bus und verschwindet dann wieder. Der Loxone Zugangs-Baustein erkennt
+> diese Flanke und triggert die konfigurierte Aktion.
 
 ## Betriebsablauf
 
 ```
-Person hält iPhone oder Apple Watch an Leser
-               ↓
-PN532 erkennt NFC-Feld (HomeKey Protokoll)
+Person hält iPhone oder Apple Watch an PN532-Leser
                ↓
 ESP32 validiert HomeKey-Signatur (lokal, kein Internet)
                ↓
-ESP32 sucht issuerId in Mapping-Tabelle (NVS Flash)
+ROM = [0x01] + issuerId[0..5] + [CRC8]
                ↓
-ESP32 aktiviert iButton-Emulation auf GPIO4 (3 Sekunden)
+ESP32 aktiviert iButton-Emulation auf GPIO27
                ↓
-Loxone 1-Wire Extension scannt Bus → erkennt iButton-ROM
+Loxone 1-Wire Extension scannt Bus → erkennt iButton-ROM (1→Zustand)
                ↓
-Loxone prüft Berechtigung → öffnet Tür
+esp_timer nach Active Duration → iButton verschwindet (→0-Zustand)
+               ↓
+Loxone Zugangs-Baustein erkennt Flanke → öffnet Tür
 ```
 
 ## Betrieb ohne WLAN
 
 Der 1-Wire Betrieb funktioniert vollständig ohne WLAN-Verbindung:
 - HomeKey-Validierung läuft lokal (Elliptic-Curve Kryptographie auf dem ESP32)
-- Mapping-Tabelle liegt im NVS-Flash (bleibt nach Reboot erhalten)
+- ROM-Ableitung ist deterministisch (keine Netzwerkabhängigkeit)
 - WLAN wird nur für initiale HomeKit-Kopplung und Web-UI-Konfiguration benötigt
 
 ## Sicherheitshinweise
 
 | Aspekt | Maßnahme |
 |--------|----------|
-| WLAN AP | Nur bei fehlender HomeKit-Kopplung aktiv. SSID ist MAC-basiert, Passwort in Kconfig setzen. |
-| Kein Internet | HomeKey-Validierung vollständig lokal. |
-| 1-Wire | Kabelgebunden, kein Funk zwischen ESP32 und Loxone. |
-| Web-UI | Nur im lokalen Netzwerk erreichbar (kein HTTPS auf ESP32). Nach Konfiguration WLAN optional. |
-| NVS | Mapping-Daten im Flash. Für höchste Sicherheit: Flash-Encryption in ESP-IDF aktivieren. |
+| WLAN AP | Nur aktiv wenn keine HomeKit-Kopplung vorhanden. Passwort in Kconfig setzen. |
+| HomeKey | Kryptographische Authentifizierung, fälschungssicher |
+| 1-Wire | Kabelgebunden, kein Funk zwischen ESP32 und Loxone |
+| Web-UI | Nur im lokalen Netzwerk erreichbar (kein HTTPS). Nach Konfiguration WLAN optional. |
+| ROM-Determinismus | Gleiche Apple-ID = gleicher ROM. Für mehrere Personen: jede Person hat eigene Apple-ID = eigenen ROM = eigene Loxone-Berechtigung. |
 
 ## Troubleshooting
 
 | Problem | Prüfung |
 |---------|---------|
-| Loxone erkennt iButton nicht | Pull-up vorhanden? GPIO4 korrekt? Gemeinsame Masse? `LOXONE_ACTIVE_DURATION_MS` erhöhen? |
+| Loxone erkennt iButton nicht | Pull-up 4.7 kΩ vorhanden? GPIO27 korrekt konfiguriert? Gemeinsame Masse? |
+| Zustandsänderung triggert nicht | `Active Duration` erhöhen (5000+ ms). Loxone-Polling-Intervall prüfen. |
 | issuerId wird nicht geloggt | PN532 SPI-Pins korrekt? Stromversorgung stabil? |
-| Mapping nicht gespeichert | NVS-Partition vorhanden (`idf.py build` Fehler prüfen)? |
+| ESP32 verbindet ohne USB nicht | 100 µF Elko an 3.3V/GND? arduino-esp32 ≥3.3.8 (dieser Fork)? |
 | AP öffnet sich nach Reboot | HomeKit-Kopplung verloren → erneut koppeln |
-| 1-Wire Timing-Probleme | Kabellänge < 30m halten. Keine anderen 1-Wire-Geräte am gleichen Bus-Segment. |
+| 1-Wire Timing-Probleme | Kabellänge < 30 m halten. Nur einen Bus-Teilnehmer gleichzeitig aktiv. |
 
 ## iButton ROM Kurzreferenz
 
-DS1990A ROM-Struktur (8 Bytes, LSB zuerst auf dem Bus):
+DS1990A ROM-Struktur (8 Bytes):
 ```
-Byte 0:    0x01           (Familiencode DS1990A — immer 0x01)
-Bytes 1-6: Seriennummer   (beliebig wählen, nicht vorhersehbar wählen)
-Byte 7:    CRC8           (wird von Firmware automatisch berechnet)
+Byte 0:    0x01              (Familiencode DS1990A — immer 0x01)
+Bytes 1-6: issuerId[0..5]    (erste 6 Bytes der HomeKey issuerId)
+Byte 7:    CRC8              (Dallas CRC, automatisch berechnet)
 ```
 
-Beispiel-Eingabe (7 Bytes, CRC auto):
+Beispiel:
 ```
-01A1B2C3D4E5F6   → Firmware berechnet CRC und speichert 01A1B2C3D4E5F6XX
+issuerId:  f2 96 35 48 4b 2e 48 ...
+ROM:       01 f2 96 35 48 4b 2e AA   (AA = berechnetes CRC8)
 ```

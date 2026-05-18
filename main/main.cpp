@@ -66,12 +66,20 @@ static void start_captive_portal(void)
     ESP_LOGI("Main", "DNS server started for captive portal");
 }
 
+static bool webStarted = false;
+
+static void startWebServer() {
+  if (webStarted) return;
+  webStarted = true;
+  char identifier[18];
+  sprintf(identifier, "%.2s%.2s%.2s%.2s%.2s%.2s", HAPClient::accessory.ID, HAPClient::accessory.ID + 3, HAPClient::accessory.ID + 6, HAPClient::accessory.ID + 9, HAPClient::accessory.ID + 12, HAPClient::accessory.ID + 15);
+  mqttManager->begin(std::string(identifier));
+  webServerManager->begin();
+}
+
 std::function<void(int)> lambda = [](int status) {
   if (status == 1) {
-    char identifier[18];
-    sprintf(identifier, "%.2s%.2s%.2s%.2s%.2s%.2s", HAPClient::accessory.ID, HAPClient::accessory.ID + 3, HAPClient::accessory.ID + 6, HAPClient::accessory.ID + 9, HAPClient::accessory.ID + 12, HAPClient::accessory.ID + 15);
-    mqttManager->begin(std::string(identifier));
-    webServerManager->begin(); 
+    startWebServer();
   } else if (status == 0){
     pollHS = false;
     mqttManager->end();
@@ -105,6 +113,9 @@ using namespace loggable;
  *       GPIO pin configuration based on persisted settings.
  */
 void setup() {
+  gpio_set_pull_mode(GPIO_NUM_3, GPIO_PULLUP_ONLY);  // UART0 RX idle-HIGH without CH340
+  WiFi.disconnect(false);     // prevent auto-connect before HomeSpan registers GOT_IP handler
+  WiFi.setAutoReconnect(false);
   Serial.begin(115200);
   loggable::espidf::LogHook::install(false, true);
   Sinker::instance().add_sinker(std::make_shared<loggable::ConsoleLogSinker>());
@@ -202,6 +213,22 @@ void setup() {
       count++;
     }
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+
+  // Fallback: start webserver if HomeSpan missed the GOT_IP event (e.g. no USB serial)
+  WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info){
+    startWebServer();
+  }, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+
+  // Watchdog: restart if WiFi never connects within 90s of boot
+  xTaskCreate([](void*) {
+    vTaskDelay(pdMS_TO_TICKS(90000));
+    if (!WiFi.isConnected()) {
+      ESP_LOGI("WiFiWatchdog", "No WiFi after 90s — restarting");
+      esp_restart();
+    }
+    vTaskDelete(nullptr);
+  }, "wifi_wd", 2048, nullptr, 1, nullptr);
+
   pollHS = true;
 }
 

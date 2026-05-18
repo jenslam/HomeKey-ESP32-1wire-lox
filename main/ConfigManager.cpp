@@ -116,6 +116,7 @@ ConfigManager::ConfigManager() : m_isInitialized(false) {
       {"enabled",          &m_loxoneConfig.enabled},
       {"gpioPin",          &m_loxoneConfig.gpioPin},
       {"activeDurationMs", &m_loxoneConfig.activeDurationMs},
+      {"romSource",        &m_loxoneConfig.romSource},
     }},
     {
       "actions", {

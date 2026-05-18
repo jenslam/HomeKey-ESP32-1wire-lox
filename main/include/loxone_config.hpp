@@ -17,6 +17,9 @@ struct loxone_config_t {
     bool     enabled          = true;
     uint8_t  gpioPin          = CONFIG_LOXONE_ONEWIRE_GPIO;
     uint16_t activeDurationMs = CONFIG_LOXONE_ACTIVE_DURATION_MS;
+    // 0 = issuerId (same for all devices on one Apple ID)
+    // 1 = endpointId (unique per physical device)
+    uint8_t  romSource        = 0;
 };
 
 } // namespace espConfig

@@ -20,7 +20,7 @@ dependencies:
       type: service
     version: 1.0.36
   espressif/arduino-esp32:
-    component_hash: dcff5d6fbbe18c30bfe76cd200dc2b1254c98a7116a6835b600ae9076ff8761c
+    component_hash: 40614111c1f42f83585134d7105761fb95dd6cee38c0a66e1b572fe6212ffaa7
     dependencies:
     - name: chmorgan/esp-libhelix-mp3
       registry_url: https://components.espressif.com
@@ -77,7 +77,7 @@ dependencies:
       require: private
       rules:
       - if: target == esp32p4
-      version: ^2.8.0
+      version: ^2.9.2
     - name: espressif/esp_insights
       registry_url: https://components.espressif.com
       require: private
@@ -153,7 +153,7 @@ dependencies:
     - esp32p4
     - esp32s2
     - esp32s3
-    version: 3.3.5
+    version: 3.3.8
   espressif/cbor:
     component_hash: dad9ca860963e930366510a10b422b3125a4fb27b979712ed65efcbcd742de50
     dependencies:
@@ -477,6 +477,6 @@ direct_dependencies:
 - espressif/libsodium
 - idf
 - joltwallet/littlefs
-manifest_hash: 25bbeb56d69e9e812fd6b45c48012635ac3b68ff886d64d12948aa1d6e404874
+manifest_hash: 2bfec45c9b36d4b396742cf256a7a4c9bc76c9a6a656258a998d98d82e90bd57
 target: esp32
 version: 2.0.0

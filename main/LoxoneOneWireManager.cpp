@@ -12,9 +12,11 @@ LoxoneOneWireManager::LoxoneOneWireManager(const espConfig::loxone_config_t& con
     : m_config(config), m_gpio(static_cast<gpio_num_t>(config.gpioPin)) {}
 
 LoxoneOneWireManager::~LoxoneOneWireManager() {
+    if (m_deactivateTimer) {
+        esp_timer_stop(m_deactivateTimer);
+        esp_timer_delete(m_deactivateTimer);
+    }
     if (m_taskHandle) vTaskDelete(m_taskHandle);
-    if (m_resetSem)   vSemaphoreDelete(m_resetSem);
-    gpio_isr_handler_remove(m_gpio);
 }
 
 // ---------------------------------------------------------------------------
@@ -24,31 +26,31 @@ LoxoneOneWireManager::~LoxoneOneWireManager() {
 void LoxoneOneWireManager::begin() {
     if (!m_config.enabled) return;
 
-    // Configure GPIO4 as open-drain: drive LOW to pull bus down, write 1 to float
     gpio_config_t io = {
         .pin_bit_mask  = 1ULL << m_gpio,
         .mode          = GPIO_MODE_INPUT_OUTPUT_OD,
-        .pull_up_en    = GPIO_PULLUP_DISABLE,   // external 4.7kΩ pull-up on board
+        .pull_up_en    = GPIO_PULLUP_DISABLE,   // external 4.7kΩ pull-up
         .pull_down_en  = GPIO_PULLDOWN_DISABLE,
-        .intr_type     = GPIO_INTR_ANYEDGE,     // ISR on both rising and falling
+        .intr_type     = GPIO_INTR_DISABLE,     // polling — no ISR needed
     };
     ESP_ERROR_CHECK(gpio_config(&io));
-    gpio_set_level(m_gpio, 1);  // release bus (float to pull-up)
+    gpio_set_level(m_gpio, 1);  // release bus
 
-    m_resetSem = xSemaphoreCreateBinary();
-    configASSERT(m_resetSem);
+    const esp_timer_create_args_t timerArgs = {
+        .callback        = deactivateCallback,
+        .arg             = this,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name            = "ow_deactivate",
+        .skip_unhandled_events = false,
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&timerArgs, &m_deactivateTimer));
 
-    // gpio_install_isr_service is idempotent when called multiple times
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(m_gpio, isrHandler, this);
-
-    // High-priority task on core 1 to avoid interference with NFC on core 0
+    // High-priority task on core 1 — polls GPIO directly for timing accuracy
     BaseType_t ok = xTaskCreatePinnedToCore(
         taskEntry, "ow_slave", 4096, this, 20, &m_taskHandle, 1
     );
     configASSERT(ok == pdPASS);
 
-    // Subscribe to NFC_TAP_EVENT on the EventBus
     m_nfcEventSub = AppEventLoop::subscribe(NFC_EVENT, NFC_TAP_EVENT,
         [this](const uint8_t* data, size_t size) {
             if (!data || size == 0) return;
@@ -60,25 +62,26 @@ void LoxoneOneWireManager::begin() {
             EventHKTap tap = alpaca::deserialize<EventHKTap>(nfc_event.data, ec);
             if (ec || !tap.status) return;
 
-            // Convert issuerId bytes to lowercase hex string
-            std::string issuerHex;
-            issuerHex.reserve(tap.issuerId.size() * 2);
-            for (uint8_t b : tap.issuerId) {
+            const auto& sourceBytes = (m_config.romSource == 1) ? tap.endpointId : tap.issuerId;
+            const char* sourceName  = (m_config.romSource == 1) ? "endpointId" : "issuerId";
+
+            std::string sourceHex;
+            sourceHex.reserve(sourceBytes.size() * 2);
+            for (uint8_t b : sourceBytes) {
                 char buf[3];
                 snprintf(buf, sizeof(buf), "%02x", b);
-                issuerHex += buf;
+                sourceHex += buf;
             }
-            ESP_LOGI(TAG, "HomeKey tap — issuerId: %s", issuerHex.c_str());
 
             espConfig::ibutton_rom_t rom{};
             rom[0] = 0x01;
-            for (size_t i = 0; i < 6 && i < tap.issuerId.size(); i++) {
-                rom[i + 1] = tap.issuerId[i];
+            for (size_t i = 0; i < 6 && i < sourceBytes.size(); i++) {
+                rom[i + 1] = sourceBytes[i];
             }
             dallas_rom_set_crc(rom);
 
-            ESP_LOGI(TAG, "issuerId: %s → ROM: %02X%02X%02X%02X%02X%02X%02X%02X",
-                issuerHex.c_str(),
+            ESP_LOGI(TAG, "%s: %s → ROM: %02X%02X%02X%02X%02X%02X%02X%02X",
+                sourceName, sourceHex.c_str(),
                 rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
             ESP_LOGI(TAG, "Add to Loxone (if new): %02X%02X%02X%02X%02X%02X%02X%02X",
                 rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
@@ -86,42 +89,23 @@ void LoxoneOneWireManager::begin() {
             activateRom(rom);
         });
 
-    ESP_LOGI(TAG, "1-Wire slave started on GPIO%d", m_gpio);
+    ESP_LOGI(TAG, "1-Wire slave started on GPIO%d (polling mode)", m_gpio);
 }
 
 void LoxoneOneWireManager::activateRom(const espConfig::ibutton_rom_t& rom) {
-    m_activeRom   = rom;
-    m_activeUntil = esp_timer_get_time() + (int64_t)m_config.activeDurationMs * 1000;
+    m_activeRom = rom;
+    esp_timer_stop(m_deactivateTimer);
+    esp_timer_start_once(m_deactivateTimer, (uint64_t)m_config.activeDurationMs * 1000ULL);
     m_active.store(true, std::memory_order_release);
     ESP_LOGI(TAG, "ROM active for %u ms: %02X %02X %02X %02X %02X %02X %02X %02X",
         m_config.activeDurationMs,
         rom[0], rom[1], rom[2], rom[3], rom[4], rom[5], rom[6], rom[7]);
 }
 
-// ---------------------------------------------------------------------------
-// ISR — runs in interrupt context, no heap, no logging
-// ---------------------------------------------------------------------------
-
-void IRAM_ATTR LoxoneOneWireManager::isrHandler(void* arg) {
-    static_cast<LoxoneOneWireManager*>(arg)->handleEdge();
-}
-
-void IRAM_ATTR LoxoneOneWireManager::handleEdge() {
-    int     level = gpio_get_level(m_gpio);
-    int64_t now   = esp_timer_get_time();
-
-    if (level == 0) {
-        // Falling edge: record timestamp for duration measurement
-        m_tFall = now;
-    } else {
-        // Rising edge: compute LOW duration
-        int64_t dur = now - m_tFall;
-        if (dur >= RESET_PULSE_MIN_US) {
-            BaseType_t woken = pdFALSE;
-            xSemaphoreGiveFromISR(m_resetSem, &woken);
-            portYIELD_FROM_ISR(woken);
-        }
-    }
+void LoxoneOneWireManager::deactivateCallback(void* arg) {
+    auto* self = static_cast<LoxoneOneWireManager*>(arg);
+    self->m_active.store(false, std::memory_order_release);
+    ESP_LOGI(TAG, "1-Wire active window expired — device now absent on bus");
 }
 
 // ---------------------------------------------------------------------------
@@ -134,30 +118,33 @@ void LoxoneOneWireManager::taskEntry(void* arg) {
 }
 
 // ---------------------------------------------------------------------------
-// 1-Wire slave state machine (runs in owTask, timing-critical sections
-// use portDISABLE_INTERRUPTS to prevent FreeRTOS preemption)
+// 1-Wire slave state machine
+//
+// Uses direct GPIO polling instead of ISR+semaphore. Reason: the ISR fires on
+// the core where gpio_install_isr_service was called (core 0), but owTask runs
+// on core 1. FreeRTOS inter-core wakeup latency is 50-200µs — far beyond the
+// 15-60µs presence-detect window. Polling inside the task eliminates this
+// latency entirely: the presence pulse is sent from the same execution context
+// that detected the rising edge of the reset pulse.
 // ---------------------------------------------------------------------------
 
 void LoxoneOneWireManager::owTask() {
     ESP_LOGI(TAG, "1-Wire slave task running on core %d", xPortGetCoreID());
 
     while (true) {
-        if (xSemaphoreTake(m_resetSem, portMAX_DELAY) != pdTRUE) continue;
-
-        // Check active window
-        if (!m_active.load(std::memory_order_acquire)) continue;
-        if (esp_timer_get_time() > m_activeUntil) {
-            m_active.store(false, std::memory_order_release);
-            ESP_LOGI(TAG, "1-Wire active window expired");
+        if (!m_active.load(std::memory_order_acquire)) {
+            vTaskDelay(pdMS_TO_TICKS(5));  // sleep when no device to emulate
             continue;
         }
 
+        // Poll for reset pulse and send presence immediately on detection
+        if (!detectResetAndPresence()) continue;
+
+        // Disable scheduler preemption during timing-critical bit exchange
         portDISABLE_INTERRUPTS();
 
-        sendPresence();
         uint8_t cmd = receiveByte();
-
-        ESP_EARLY_LOGD(TAG, "OW command: 0x%02X", cmd);
+        ESP_EARLY_LOGI(TAG, "OW cmd: 0x%02X", cmd);
 
         switch (cmd) {
             case CMD_READ_ROM:
@@ -166,12 +153,14 @@ void LoxoneOneWireManager::owTask() {
             case CMD_SEARCH_ROM:
                 handleSearchRom();
                 break;
+            case CMD_MATCH_ROM:
+                handleMatchRom();
+                break;
             case CMD_SKIP_ROM:
-                // DS1990A has no function commands — nothing follows Skip ROM
-                ESP_EARLY_LOGD(TAG, "Skip ROM received");
+                ESP_EARLY_LOGD(TAG, "Skip ROM");
                 break;
             default:
-                ESP_EARLY_LOGW(TAG, "Unknown OW command: 0x%02X", cmd);
+                ESP_EARLY_LOGW(TAG, "Unknown OW cmd: 0x%02X", cmd);
                 break;
         }
 
@@ -180,31 +169,63 @@ void LoxoneOneWireManager::owTask() {
 }
 
 // ---------------------------------------------------------------------------
+// Reset detection + presence pulse (polling, no ISR)
+// ---------------------------------------------------------------------------
+
+bool LoxoneOneWireManager::detectResetAndPresence() {
+    // Drain any ongoing LOW on the bus before looking for a new reset
+    {
+        uint32_t drain = 100000;
+        while (gpio_get_level(m_gpio) == 0 && --drain) {
+            ets_delay_us(1);
+        }
+        if (!drain) return false;
+    }
+
+    // Wait for falling edge (start of reset pulse). 1µs poll keeps timing
+    // accurate without burning 100 % CPU when the bus is idle for a long time.
+    while (gpio_get_level(m_gpio) == 1) {
+        if (!m_active.load(std::memory_order_acquire)) return false;
+        ets_delay_us(1);
+    }
+    int64_t t_fall = esp_timer_get_time();
+
+    // Wait for rising edge (reset pulse ends)
+    while (gpio_get_level(m_gpio) == 0) {
+        if (esp_timer_get_time() - t_fall > 10000) return false;  // 10ms sanity
+    }
+    int64_t dur = esp_timer_get_time() - t_fall;
+
+    if (dur < RESET_PULSE_MIN_US) return false;  // spurious glitch
+    if (!m_active.load(std::memory_order_acquire)) return false;
+
+    // Valid reset — send presence pulse immediately (within window 15-60µs)
+    ets_delay_us(PRESENCE_DELAY_US);   // 30µs post-reset delay
+    gpio_set_level(m_gpio, 0);          // pull bus LOW (presence)
+    ets_delay_us(PRESENCE_PULSE_US);    // 120µs
+    gpio_set_level(m_gpio, 1);          // release
+    ets_delay_us(10);
+
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // 1-Wire protocol primitives
 // ---------------------------------------------------------------------------
 
-void LoxoneOneWireManager::sendPresence() {
-    // Master released bus after reset — wait, then pull LOW for presence
-    ets_delay_us(PRESENCE_DELAY_US);
-    gpio_set_level(m_gpio, 0);          // drive LOW (presence pulse)
-    ets_delay_us(PRESENCE_PULSE_US);
-    gpio_set_level(m_gpio, 1);          // release (pull-up restores HIGH)
-    ets_delay_us(10);
-}
-
 bool LoxoneOneWireManager::receiveBit() {
-    // Wait for master to initiate bit slot (falling edge)
+    // Wait for master's falling edge (bit slot start)
     uint32_t timeout = 10000;
     while (gpio_get_level(m_gpio) == 1 && --timeout) {
         ets_delay_us(1);
     }
     if (!timeout) return false;
 
-    // Sample 30µs into the bit slot
+    // Sample 30µs into the slot
     ets_delay_us(BIT_SAMPLE_US);
     bool bit = gpio_get_level(m_gpio) == 1;
 
-    // Wait for end of slot (70µs total from falling edge)
+    // Wait for remaining slot time
     ets_delay_us(BIT_SLOT_US - BIT_SAMPLE_US);
     return bit;
 }
@@ -218,7 +239,7 @@ uint8_t LoxoneOneWireManager::receiveByte() {
 }
 
 void LoxoneOneWireManager::sendBit(bool bit) {
-    // Wait for master to initiate bit slot
+    // Wait for master's falling edge (read slot start)
     uint32_t timeout = 10000;
     while (gpio_get_level(m_gpio) == 1 && --timeout) {
         ets_delay_us(1);
@@ -226,14 +247,14 @@ void LoxoneOneWireManager::sendBit(bool bit) {
     if (!timeout) return;
 
     if (!bit) {
-        // Send 0: extend the LOW beyond master's release point
+        // Send 0: extend LOW past master's 30µs sample point
         ets_delay_us(5);
-        gpio_set_level(m_gpio, 0);  // actively pull LOW
-        ets_delay_us(55);           // hold through master's sample point (~30µs)
-        gpio_set_level(m_gpio, 1);  // release
+        gpio_set_level(m_gpio, 0);
+        ets_delay_us(55);
+        gpio_set_level(m_gpio, 1);
         ets_delay_us(10);
     } else {
-        // Send 1: don't drive — pull-up holds HIGH after master releases
+        // Send 1: release — pull-up holds HIGH through sample point
         ets_delay_us(BIT_SLOT_US);
     }
 }
@@ -258,8 +279,6 @@ void LoxoneOneWireManager::handleReadRom() {
 }
 
 void LoxoneOneWireManager::handleSearchRom() {
-    // Bit-by-bit search ROM for single device on bus
-    // Master reads bit, reads complement, writes choice; we always match
     for (int bit_idx = 0; bit_idx < 64; bit_idx++) {
         bool rom_bit  = (m_activeRom[bit_idx / 8] >> (bit_idx % 8)) & 1;
         bool rom_comp = !rom_bit;
@@ -268,12 +287,24 @@ void LoxoneOneWireManager::handleSearchRom() {
         sendBit(rom_comp);
 
         bool master_choice = receiveBit();
-
-        // If master chose a different branch, go silent — we're not on that path
         if (master_choice != rom_bit) {
             ESP_EARLY_LOGD(TAG, "Search ROM: diverged at bit %d", bit_idx);
             return;
         }
     }
     ESP_EARLY_LOGI(TAG, "Search ROM: device fully selected");
+}
+
+void LoxoneOneWireManager::handleMatchRom() {
+    // Receive 8-byte ROM from master and check if it's us
+    uint8_t received[8];
+    for (int i = 0; i < 8; i++) {
+        received[i] = receiveByte();
+    }
+    bool match = true;
+    for (int i = 0; i < 8; i++) {
+        if (received[i] != m_activeRom[i]) { match = false; break; }
+    }
+    ESP_EARLY_LOGI(TAG, "Match ROM: %s", match ? "selected" : "not us");
+    // DS1990A has no function commands after Match ROM — nothing more to do
 }
