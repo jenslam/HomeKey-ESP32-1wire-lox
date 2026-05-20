@@ -1,3 +1,16 @@
+menu "HomeKey Setup AP"
+
+    config HOMEKEY_AP_PASSWORD
+        string "WiFi AP setup password (min 8 chars, WPA2/WPA3)"
+        default "changeme1"
+        help
+            Password for the temporary setup WiFi AP that is started when no
+            WiFi credentials are configured.  Change this before first flash.
+            The AP is only active until credentials are saved via the captive
+            portal and the device reboots.
+
+endmenu
+
 menu "Arduino Console USB-JTAG"
   config ARDUINO_USE_USB_JTAG
     depends on !IDF_TARGET_ESP32
