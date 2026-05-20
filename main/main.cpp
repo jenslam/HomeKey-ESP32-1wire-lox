@@ -24,6 +24,7 @@
 #include "loggable_espidf.hpp"
 #include "WebSocketLogSinker.h"
 #include "lwip/inet.h"
+#include <esp_wifi.h>
 
 std::unique_ptr<LockManager> lockManager;
 std::unique_ptr<ReaderDataManager> readerDataManager;
@@ -93,9 +94,8 @@ std::function<void(int)> lambda = [](int status) {
     WiFi.softAP(apSsid, CONFIG_HOMEKEY_AP_PASSWORD, 11, false, 2, false, WIFI_AUTH_WPA2_WPA3_PSK, WIFI_CIPHER_TYPE_AES_CMAC128);
     start_captive_portal();
     webServerManager->begin();
-    while(true){
-      vTaskDelay(pdMS_TO_TICKS(100));
-    }
+    // Return immediately — do not block setup(). HAP starts after WiFi credentials are
+    // saved via captive portal and device reboots.
   }
 };
 using namespace loggable;
@@ -114,8 +114,26 @@ using namespace loggable;
  */
 void setup() {
   gpio_set_pull_mode(GPIO_NUM_3, GPIO_PULLUP_ONLY);  // UART0 RX idle-HIGH without CH340
-  WiFi.disconnect(false);     // prevent auto-connect before HomeSpan registers GOT_IP handler
-  WiFi.setAutoReconnect(false);
+
+  // Read stored WiFi credentials from arduino-esp32 NVS before turning off WiFi.
+  // Used to bridge into HomeSpan's wifiNVS if it was never populated (e.g. captive-portal
+  // session was interrupted before homeSpan.setWifiCredentials() could be called).
+  char bridgeSSID[33] = {0};
+  char bridgePSK[65] = {0};
+  WiFi.mode(WIFI_STA);  // ensure WiFi driver is initialised so esp_wifi_get_config() works
+  {
+    wifi_config_t wifiStaCfg = {};
+    if (esp_wifi_get_config(WIFI_IF_STA, &wifiStaCfg) == ESP_OK && strlen((char*)wifiStaCfg.sta.ssid) > 0) {
+      strncpy(bridgeSSID, (char*)wifiStaCfg.sta.ssid, 32);
+      strncpy(bridgePSK, (char*)wifiStaCfg.sta.password, 64);
+    }
+  }
+
+  // Stop WiFi entirely so any in-progress auto-connect from NVS is cancelled before HomeSpan
+  // registers its GOT_IP handler. HomeSpan.begin() will re-enable WiFi through its own init.
+  WiFi.disconnect(true);    // disconnect + turn off WiFi module
+  WiFi.mode(WIFI_OFF);
+  vTaskDelay(pdMS_TO_TICKS(100));
   Serial.begin(115200);
   loggable::espidf::LogHook::install(false, true);
   Sinker::instance().add_sinker(std::make_shared<loggable::ConsoleLogSinker>());
@@ -202,6 +220,15 @@ void setup() {
   // Loxone REST routes are registered in WebServerManager::setupRoutes()
   // called during webServerManager->begin() below
   hardwareManager->begin();
+
+  // Bridge arduino WiFi credentials into HomeSpan's wifiNVS if HomeSpan has none.
+  // homeSpan.begin() (inside homekitLock->begin()) writes the struct to NVS and skips
+  // AP mode when the struct is populated — so we must seed it BEFORE begin().
+  if (strlen(bridgeSSID) > 0) {
+    homeSpan.setWifiCredentials(bridgeSSID, bridgePSK);
+    ESP_LOGI("Main", "Seeded HomeSpan WiFi from arduino NVS: %s", bridgeSSID);
+  }
+
   homekitLock->begin();
   lockManager->begin();
   WiFi.onEvent([](arduino_event_id_t event){
@@ -214,16 +241,20 @@ void setup() {
     }
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
-  // Fallback: start webserver if HomeSpan missed the GOT_IP event (e.g. no USB serial)
+  // Fallback: start webserver + re-enable HAP polling if HomeSpan missed GOT_IP (headless boot)
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info){
     startWebServer();
+    pollHS = true;
   }, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 
-  // Watchdog: restart if WiFi never connects within 90s of boot
+  // Watchdog: restart if WiFi never connects within 90s of boot.
+  // Skip restart in AP/APSTA mode — device is awaiting credentials via captive portal.
   xTaskCreate([](void*) {
     vTaskDelay(pdMS_TO_TICKS(90000));
-    if (!WiFi.isConnected()) {
-      ESP_LOGI("WiFiWatchdog", "No WiFi after 90s — restarting");
+    wifi_mode_t wdMode = WIFI_MODE_NULL;
+    esp_wifi_get_mode(&wdMode);
+    if (wdMode == WIFI_MODE_STA && !WiFi.isConnected()) {
+      ESP_LOGI("WiFiWatchdog", "No WiFi after 90s in STA mode — restarting");
       esp_restart();
     }
     vTaskDelete(nullptr);

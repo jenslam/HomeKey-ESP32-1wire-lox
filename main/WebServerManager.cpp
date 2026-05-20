@@ -139,7 +139,7 @@ void WebServerManager::begin() {
   bool isApMode = (wifiErr == ESP_OK && (currentMode == WIFI_MODE_AP || currentMode == WIFI_MODE_APSTA));
   bool isHttpsEnabled = m_configManager.getConfig<espConfig::misc_config_t>().webHttpsEnabled;
   httpd_ssl_config_t ssl_config = HTTPD_SSL_CONFIG_DEFAULT();
-  ssl_config.httpd.max_uri_handlers = 22;
+  ssl_config.httpd.max_uri_handlers = 32;
   ssl_config.httpd.max_open_sockets = 4;
   ssl_config.httpd.stack_size = 6144;
   ssl_config.httpd.uri_match_fn = httpd_uri_match_wildcard;
@@ -1201,6 +1201,7 @@ esp_err_t WebServerManager::handleClearConfig(httpd_req_t *req) {
 // Action Handlers
 // ============================================================================
 
+
 esp_err_t WebServerManager::handleReboot(httpd_req_t *req) {
   httpd_resp_set_type(req, "application/json");
   httpd_resp_sendstr(req,
@@ -1586,12 +1587,14 @@ esp_err_t WebServerManager::handleSaveCaptivePortalConfig(httpd_req_t *req) {
   httpd_resp_set_type(req, "application/json");
   cJSON *res = cJSON_CreateObject();
   cJSON_AddItemToObject(res, "success", cJSON_CreateBool(true));
-  cJSON_AddItemToObject(res, "message", cJSON_CreateString("Configuration saved successfully"));
+  cJSON_AddItemToObject(res, "message", cJSON_CreateString("Configuration saved. Rebooting..."));
   cJSON *data = cJSON_CreateObject();
   cJSON_AddStringToObject(data, "ip_addr", WiFi.localIP().toString().c_str());
   cJSON_AddItemToObject(res, "data", data);
   std::string response = cjson_to_string_and_free(res);
   httpd_resp_send(req, response.c_str(), HTTPD_RESP_USE_STRLEN);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  esp_restart();
   return ESP_OK;
 }
 
@@ -1879,7 +1882,7 @@ void WebServerManager::broadcastWs(const uint8_t *payload, size_t len,
     for (const auto &c : m_wsClients)
       fds.push_back(c->fd);
   }
-  static const size_t max_buffer = 64;
+  static const size_t max_buffer = 512;
   if (fds.empty()) {
     if(m_wsBroadcastBuffer.size() >= max_buffer){
       m_wsBroadcastBuffer.pop_front();
