@@ -139,7 +139,7 @@ void WebServerManager::begin() {
   bool isApMode = (wifiErr == ESP_OK && (currentMode == WIFI_MODE_AP || currentMode == WIFI_MODE_APSTA));
   bool isHttpsEnabled = m_configManager.getConfig<espConfig::misc_config_t>().webHttpsEnabled;
   httpd_ssl_config_t ssl_config = HTTPD_SSL_CONFIG_DEFAULT();
-  ssl_config.httpd.max_uri_handlers = 22;
+  ssl_config.httpd.max_uri_handlers = 32;
   ssl_config.httpd.max_open_sockets = 4;
   ssl_config.httpd.stack_size = 6144;
   ssl_config.httpd.uri_match_fn = httpd_uri_match_wildcard;
@@ -1863,7 +1863,7 @@ void WebServerManager::broadcastWs(const uint8_t *payload, size_t len,
     for (const auto &c : m_wsClients)
       fds.push_back(c->fd);
   }
-  static const size_t max_buffer = 64;
+  static const size_t max_buffer = 512;
   if (fds.empty()) {
     if(m_wsBroadcastBuffer.size() >= max_buffer){
       m_wsBroadcastBuffer.pop_front();
