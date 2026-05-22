@@ -15,6 +15,7 @@
 #include "HardwareManager.hpp"
 #include "MqttManager.hpp"
 #include "WebServerManager.hpp"
+#include "LoxoneOneWireManager.hpp"
 #include <functional>
 #include <sodium/crypto_sign.h>
 #include <sodium/crypto_box.h>
@@ -32,6 +33,7 @@ std::unique_ptr<MqttManager> mqttManager;
 std::unique_ptr<WebServerManager> webServerManager;
 std::unique_ptr<HomeKitLock> homekitLock;
 std::unique_ptr<NfcManager> nfcManager;
+std::unique_ptr<LoxoneOneWireManager> loxoneManager;
 
 static dns_server_handle_t dns_server = NULL;
 
@@ -114,6 +116,11 @@ void setup() {
   Sinker::instance().add_sinker(std::make_shared<loggable::WebSocketLogSinker>(webServerManager.get()));
   hardwareManager = std::make_unique<HardwareManager>(configManager->getConfig<espConfig::actions_config_t>());
   lockManager = std::make_unique<LockManager>(configManager->getConfig<espConfig::misc_config_t>(), configManager->getConfig<espConfig::actions_config_t>());
+  // Loxone 1-Wire bridge
+  loxoneManager = std::make_unique<LoxoneOneWireManager>(
+      configManager->getConfig<espConfig::loxone_config_t>());
+  loxoneManager->begin();
+
   mqttManager = std::make_unique<MqttManager>(*configManager);
   homekitLock = std::make_unique<HomeKitLock>(lambda, *lockManager, *configManager, *readerDataManager);
   espConfig::misc_config_t miscConfig = configManager->getConfig<espConfig::misc_config_t>();

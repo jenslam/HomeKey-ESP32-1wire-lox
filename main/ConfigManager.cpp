@@ -112,6 +112,12 @@ ConfigManager::ConfigManager() : m_isInitialized(false) {
       {"logLevel", &m_miscConfig.logLevel}
     }
     },
+    {"loxone", {
+      {"enabled",          &m_loxoneConfig.enabled},
+      {"gpioPin",          &m_loxoneConfig.gpioPin},
+      {"activeDurationMs", &m_loxoneConfig.activeDurationMs},
+      {"romSource",        &m_loxoneConfig.romSource},
+    }},
     {
       "actions", {
         {"nfcNeopixelPin", &m_actionsConfig.nfcNeopixelPin},
@@ -196,6 +202,7 @@ bool ConfigManager::begin() {
   loadConfigFromNvs("MQTTSSLDATA");
   loadConfigFromNvs("MISCDATA");
   loadConfigFromNvs("HTTPSDATA");
+  loadConfigFromNvs("LOXDATA");
 
   ESP_LOGI(TAG, "Initialization complete.");
   return true;
@@ -225,7 +232,9 @@ const ConfigType& ConfigManager::getConfig() const {
     return m_miscConfig;
   } else if constexpr (std::is_same_v<NonConstConfigType, espConfig::actions_config_t>) {
     return m_actionsConfig;
-  }else {
+  } else if constexpr (std::is_same_v<NonConstConfigType, espConfig::loxone_config_t>) {
+    return m_loxoneConfig;
+  } else {
     static_assert(std::is_void_v<ConfigType> && false, "Unsupported ConfigType for getConfig");
   }
 }
@@ -235,6 +244,8 @@ template const espConfig::misc_config_t& ConfigManager::getConfig<espConfig::mis
 template const espConfig::misc_config_t& ConfigManager::getConfig<espConfig::misc_config_t const>() const;
 template const espConfig::actions_config_t& ConfigManager::getConfig<espConfig::actions_config_t>() const;
 template const espConfig::actions_config_t& ConfigManager::getConfig<espConfig::actions_config_t const>() const;
+template const espConfig::loxone_config_t& ConfigManager::getConfig<espConfig::loxone_config_t>() const;
+template const espConfig::loxone_config_t& ConfigManager::getConfig<espConfig::loxone_config_t const>() const;
 
 template <typename ConfigType>
 /**
@@ -320,6 +331,8 @@ bool ConfigManager::saveConfig() {
     key = "MISCDATA";
   } else if constexpr(std::is_same_v<ConfigType, espConfig::https_certs_t>){
     key = "HTTPSDATA";
+  } else if constexpr(std::is_same_v<ConfigType, espConfig::loxone_config_t>){
+    key = "LOXDATA";
   } else {
     static_assert(std::is_void_v<ConfigType> && false, "Unsupported ConfigType for saveConfig");
   }
@@ -334,6 +347,7 @@ bool ConfigManager::saveConfig() {
 template bool ConfigManager::saveConfig<espConfig::mqttConfig_t>();
 template bool ConfigManager::saveConfig<espConfig::misc_config_t>();
 template bool ConfigManager::saveConfig<espConfig::actions_config_t>();
+template bool ConfigManager::saveConfig<espConfig::loxone_config_t>();
 
 /**
  * @brief Loads and applies a configuration blob from NVS into the in-memory config.
@@ -408,6 +422,8 @@ void ConfigManager::loadConfigFromNvs(const char *key) {
       deserialize(obj, "actions");
     } else if(!strcmp(key, "HTTPSDATA")){
       deserialize(obj, "https");
+    } else if(!strcmp(key, "LOXDATA")){
+      deserialize(obj, "loxone");
     } else {ESP_LOGE(TAG, "Key '%s' not valid", key);return;}
   } else {
     ESP_LOGE(TAG, "Failed to parse msgpack for key '%s'. Using defaults.", key);
@@ -438,6 +454,8 @@ bool ConfigManager::saveConfigToNvs(const char *key) {
     buf = serialize<espConfig::mqttConfig_t>();
   } else if (!strcmp(key, "HTTPSDATA")){
     buf = serialize<espConfig::https_certs_t>();
+  } else if (!strcmp(key, "LOXDATA")){
+    buf = serialize<espConfig::loxone_config_t>();
   }
 
   esp_err_t set_err = nvs_set_blob(m_nvsHandle, key, buf.data(), buf.size());
@@ -617,6 +635,8 @@ std::vector<uint8_t> ConfigManager::serialize() {
     configMap = m_configMap["mqtt"];
   } else if constexpr (std::is_same_v<espConfig::https_certs_t, ConfigType>){
     configMap = m_configMap["https"];
+  } else if constexpr (std::is_same_v<espConfig::loxone_config_t, ConfigType>){
+    configMap = m_configMap["loxone"];
   }
   msgpack_pack_map(&pk, configMap.size()); // Pack the map size
 
@@ -709,6 +729,8 @@ std::string ConfigManager::updateFromJson(const std::string& json_string) {
     configMapPtr = &m_configMap["actions"];
   } else if constexpr (std::is_same_v<ConfigType, espConfig::mqttConfig_t>) {
     configMapPtr = &m_configMap["mqtt"];
+  } else if constexpr (std::is_same_v<ConfigType, espConfig::loxone_config_t>) {
+    configMapPtr = &m_configMap["loxone"];
   } else {
     ESP_LOGE(TAG, "Invalid configuration type specified.");
     return "";
@@ -817,6 +839,7 @@ std::string ConfigManager::updateFromJson(const std::string& json_string) {
 template std::string ConfigManager::updateFromJson<espConfig::misc_config_t>(const std::string& json_string);
 template std::string ConfigManager::updateFromJson<espConfig::actions_config_t>(const std::string& json_string);
 template std::string ConfigManager::updateFromJson<espConfig::mqttConfig_t>(const std::string& json_string);
+template std::string ConfigManager::updateFromJson<espConfig::loxone_config_t>(const std::string& json_string);
 
 template <typename ConfigType>
 /**
@@ -854,6 +877,8 @@ std::string ConfigManager::serializeToJson() {
     configMap = m_configMap["actions"];
   } else if constexpr (std::is_same_v<espConfig::mqttConfig_t, ConfigType>){
     configMap = m_configMap["mqtt"];
+  } else if constexpr (std::is_same_v<espConfig::loxone_config_t, ConfigType>){
+    configMap = m_configMap["loxone"];
   }
     for (const auto &pair : configMap) {
         const std::string& key = pair.first;
@@ -917,6 +942,7 @@ std::string ConfigManager::serializeToJson() {
 template std::string ConfigManager::serializeToJson<espConfig::misc_config_t>();
 template std::string ConfigManager::serializeToJson<espConfig::actions_config_t>();
 template std::string ConfigManager::serializeToJson<espConfig::mqttConfig_t>();
+template std::string ConfigManager::serializeToJson<espConfig::loxone_config_t>();
 
 template <typename ConfigType>
 /**
@@ -1541,3 +1567,4 @@ std::vector<CertificateStatus> ConfigManager::getCertificatesStatus(){
   }
   return certificates;
 }
+

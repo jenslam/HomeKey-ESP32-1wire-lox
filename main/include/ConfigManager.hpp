@@ -60,6 +60,7 @@ public:
     std::string loadCertificate(espConfig::CertType certType);
     
     std::vector<CertificateStatus> getCertificatesStatus();
+
     const espConfig::mqtt_ssl_t& getMqttSslConfig() const {
       return m_mqttSslConfig;
     }
@@ -93,6 +94,7 @@ public:
     espConfig::https_certs_t m_httpsCertsConfig;
     espConfig::misc_config_t m_miscConfig;
     espConfig::actions_config_t m_actionsConfig;
+    espConfig::loxone_config_t m_loxoneConfig;
     nvs_handle m_nvsHandle;
     bool m_isInitialized;
     static const char* TAG;

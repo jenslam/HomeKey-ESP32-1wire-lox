@@ -573,6 +573,9 @@ esp_err_t WebServerManager::handleGetConfig(httpd_req_t *req) {
   } else if (type == "actions"){
     responseJson =
         instance->m_configManager.serializeToJson<espConfig::actions_config_t>();
+  } else if (type == "loxone") {
+    responseJson =
+        instance->m_configManager.serializeToJson<espConfig::loxone_config_t>();
   } else if (type == "hkinfo") {
     const auto readerData = instance->m_readerDataManager.getReaderDataCopy();
     cJSON *hkInfo = cJSON_CreateObject();
@@ -824,6 +827,10 @@ esp_err_t WebServerManager::handleSaveConfig(httpd_req_t *req) {
     std::string s =
         instance->m_configManager.serializeToJson<espConfig::actions_config_t>();
     configSchema = cJSON_Parse(s.c_str());
+  } else if (type == "loxone") {
+    std::string s =
+        instance->m_configManager.serializeToJson<espConfig::loxone_config_t>();
+    configSchema = cJSON_Parse(s.c_str());
   } else {
     cJSON_Delete(obj);
     httpd_resp_set_status(req, "400 Bad Request");
@@ -936,6 +943,13 @@ esp_err_t WebServerManager::handleSaveConfig(httpd_req_t *req) {
     if (!result.empty()) {
       success =
           instance->m_configManager.saveConfig<espConfig::actions_config_t>();
+    }
+  } else if (type == "loxone") {
+    result = instance->m_configManager.updateFromJson<espConfig::loxone_config_t>(data_str);
+    if (!result.empty()) {
+      success = instance->m_configManager.saveConfig<espConfig::loxone_config_t>();
+      rebootNeeded = true;
+      rebootMsg = "Loxone config saved, reboot needed! Rebooting...";
     }
   }
 
@@ -1570,12 +1584,14 @@ esp_err_t WebServerManager::handleSaveCaptivePortalConfig(httpd_req_t *req) {
   httpd_resp_set_type(req, "application/json");
   cJSON *res = cJSON_CreateObject();
   cJSON_AddItemToObject(res, "success", cJSON_CreateBool(true));
-  cJSON_AddItemToObject(res, "message", cJSON_CreateString("Configuration saved successfully"));
+  cJSON_AddItemToObject(res, "message", cJSON_CreateString("Configuration saved. Rebooting..."));
   cJSON *data = cJSON_CreateObject();
   cJSON_AddStringToObject(data, "ip_addr", WiFi.localIP().toString().c_str());
   cJSON_AddItemToObject(res, "data", data);
   std::string response = cjson_to_string_and_free(res);
   httpd_resp_send(req, response.c_str(), HTTPD_RESP_USE_STRLEN);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  esp_restart();
   return ESP_OK;
 }
 

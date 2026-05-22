@@ -322,6 +322,21 @@ export interface NfcGpioPinsPreset {
 }
 
 /**
+ * Loxone 1-Wire bridge configuration
+ * @type {LoxoneConfig}
+ */
+export interface LoxoneConfig {
+  /** Enable the Loxone 1-Wire bridge */
+  enabled: boolean;
+  /** GPIO pin for the 1-Wire bus (must support open-drain) */
+  gpioPin: number;
+  /** Duration in ms the virtual iButton is visible after a HomeKey tap */
+  activeDurationMs: number;
+  /** ROM source: 0 = issuerId (per Apple ID), 1 = endpointId (per device) */
+  romSource: number;
+}
+
+/**
  * OTA (Over-The-Air) update status information
  * @type {OTAStatus}
  */
