@@ -1,6 +1,6 @@
-# homekey-loxone
+# HomeKey-ESP32 — Loxone 1-Wire Bridge
 
-**Apple HomeKey → Loxone 1-Wire Bridge**
+**Apple HomeKey → Loxone iButton emulation**
 
 Fork of [rednblkx/HomeKey-ESP32](https://github.com/rednblkx/HomeKey-ESP32) with an added DS1990A iButton emulation layer. After a successful HomeKey tap, the ESP32 presents a virtual iButton ROM code on its 1-Wire bus — letting Loxone handle door access exactly as it does with physical iButtons.
 
